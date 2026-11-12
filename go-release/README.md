@@ -9,7 +9,7 @@ Releases a `.tools` Go binary: build every target with the version stamped, sign
 | stamp check | each binary in `stamp-check` must print exactly `<name> <version> (<commit>, <date>)`. Only listed binaries are ever run. |
 | notarize | one submission for every darwin binary; anything but `Accepted` fails |
 | package | `<name>_<os>_<arch>.tar.gz`, `.tar.gz.sha256` (two-space shasum, bare asset name), `checksums.txt` (+ `extra-assets`) |
-| GitHub release | created when `create`, `--prerelease` for an rc; assets uploaded with `--clobber`. Skipped entirely when `github-release: "false"` (default `"true"`) |
+| GitHub release | created when `create`, `--prerelease` for an rc; assets uploaded with `--clobber`. Skipped when `github-release: "false"` (default `"true"`), which instead pushes the annotated tag `v<VERSION>` at the commit when `create` |
 | `/dl` | `/dl/<tool>/<version>/…` immutable: the tarballs, and each `extra-assets` file with its own `.sha256`; `/dl/<tool>/latest` (bare semver, 60 s) and a CloudFront invalidation **only** for a created, non-prerelease release |
 | cleanup | keychain, certificate and API key destroyed with `if: always()` |
 
@@ -28,10 +28,10 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with: { ref: "${{ inputs.tag }}" }
       - id: rel
-        uses: subaud-tools/tools-actions/release-version@v0.14.0
+        uses: subaud-tools/tools-actions/release-version@v0.15.0
         with: { mode: version-file, dispatch-tag: "${{ inputs.tag }}" }
       - if: steps.rel.outputs.skip != 'true'
-        uses: subaud-tools/tools-actions/go-release@v0.14.0
+        uses: subaud-tools/tools-actions/go-release@v0.15.0
         with:
           binaries: |
             kempt=./cmd/kempt
@@ -58,6 +58,6 @@ jobs:
           dl-distribution-id: E309WZW10YNEN
 ```
 
-`github-release` (default `"true"`): set `"false"` for a private repo whose binaries reach users only through `/dl`. It skips creating the GitHub release and uploading its assets, and nothing else: signing, notarizing, checksums and the `/dl` publish run as before. `extra-assets` then land only in `dist/` and `checksums.txt`.
+`github-release` (default `"true"`): set `"false"` for a private repo whose binaries reach users only through `/dl`. It skips creating the GitHub release and uploading its assets, and nothing else: signing, notarizing, checksums and the `/dl` publish run as before. When `create` is true it pushes the annotated tag `<tag>` at the released commit itself (the tag `gh release create` would have made; a tag already on `origin`, such as a pushed prefixed tag, is left alone), so `release-version` sees the version as released and later pushes don't republish it. The job's token needs `contents: write` and checkout's default persisted credentials. `extra-assets` then land only in `dist/` and `checksums.txt`.
 
 A step that must run before the build (galley's wasm client) goes before `go-release`; files the release should carry beyond the tarballs (muster's Lambda zip) are written into `dist/` first and listed in `extra-assets`, which attaches them to the GitHub release and publishes them beside the tarballs on `/dl/<tool>/<version>/`. An extra asset that also matches the tarball glob is selected once by its exact path for checksums, GitHub uploads and download-page copies.
