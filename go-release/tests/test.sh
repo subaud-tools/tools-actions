@@ -150,6 +150,13 @@ check "an rc is created as a pre-release" 'grep "^gh release create" "$W/calls" 
 : > "$W/calls"
 ( cd "$mod" && env TAG=v1.1.0 CREATE=false GITHUB_REPOSITORY=o/r GITHUB_SHA=deadbeef bash "$A/github-release.sh" ) > "$W/log" 2>&1
 check "an asset rebuild creates nothing, only uploads" '! grep -q "^gh release create" "$W/calls" && grep -q "^gh release upload v1.1.0" "$W/calls"'
+: > "$W/calls"
+( cd "$mod" && env TAG=v1.2.3 CREATE=true PRERELEASE=false GITHUB_RELEASE=false GITHUB_REPOSITORY=o/r GITHUB_SHA=deadbeef bash "$A/github-release.sh" ) > "$W/log" 2>&1; rc=$?
+check "GITHUB_RELEASE=false creates and uploads nothing" '[ $rc -eq 0 ] && ! grep -q "^gh " "$W/calls"'
+: > "$W/calls"
+( cd "$mod" && env TAG=v1.2.3 CREATE=true PRERELEASE=false GITHUB_RELEASE=true GITHUB_REPOSITORY=o/r GITHUB_SHA=deadbeef bash "$A/github-release.sh" ) > "$W/log" 2>&1; rc=$?
+check "GITHUB_RELEASE=true creates and uploads" '[ $rc -eq 0 ] && grep -q "^gh release create v1.2.3" "$W/calls" && grep -q "^gh release upload v1.2.3" "$W/calls"'
+check "action.yml: github-release input defaults to true and reaches the script" 'grep -A3 "^  github-release:" "$A/action.yml" | grep -q "default: \"true\"" && grep -q "GITHUB_RELEASE: \${{ inputs.github-release }}" "$A/action.yml"'
 
 echo "== publish-dl"
 : > "$W/calls"

@@ -9,7 +9,7 @@ Releases a `.tools` Go binary: build every target with the version stamped, sign
 | stamp check | each binary in `stamp-check` must print exactly `<name> <version> (<commit>, <date>)`. Only listed binaries are ever run. |
 | notarize | one submission for every darwin binary; anything but `Accepted` fails |
 | package | `<name>_<os>_<arch>.tar.gz`, `.tar.gz.sha256` (two-space shasum, bare asset name), `checksums.txt` (+ `extra-assets`) |
-| GitHub release | created when `create`, `--prerelease` for an rc; assets uploaded with `--clobber` |
+| GitHub release | created when `create`, `--prerelease` for an rc; assets uploaded with `--clobber`. Skipped entirely when `github-release: "false"` (default `"true"`) |
 | `/dl` | `/dl/<tool>/<version>/…` immutable: the tarballs, and each `extra-assets` file with its own `.sha256`; `/dl/<tool>/latest` (bare semver, 60 s) and a CloudFront invalidation **only** for a created, non-prerelease release |
 | cleanup | keychain, certificate and API key destroyed with `if: always()` |
 
@@ -28,10 +28,10 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with: { ref: "${{ inputs.tag }}" }
       - id: rel
-        uses: subaud-tools/tools-actions/release-version@v0.13.1
+        uses: subaud-tools/tools-actions/release-version@v0.14.0
         with: { mode: version-file, dispatch-tag: "${{ inputs.tag }}" }
       - if: steps.rel.outputs.skip != 'true'
-        uses: subaud-tools/tools-actions/go-release@v0.13.1
+        uses: subaud-tools/tools-actions/go-release@v0.14.0
         with:
           binaries: |
             kempt=./cmd/kempt
@@ -57,5 +57,7 @@ jobs:
           dl-bucket: ${{ secrets.KEMPT_DOWNLOADS_BUCKET }}
           dl-distribution-id: E309WZW10YNEN
 ```
+
+`github-release` (default `"true"`): set `"false"` for a private repo whose binaries reach users only through `/dl`. It skips creating the GitHub release and uploading its assets, and nothing else: signing, notarizing, checksums and the `/dl` publish run as before. `extra-assets` then land only in `dist/` and `checksums.txt`.
 
 A step that must run before the build (galley's wasm client) goes before `go-release`; files the release should carry beyond the tarballs (muster's Lambda zip) are written into `dist/` first and listed in `extra-assets`, which attaches them to the GitHub release and publishes them beside the tarballs on `/dl/<tool>/<version>/`. An extra asset that also matches the tarball glob is selected once by its exact path for checksums, GitHub uploads and download-page copies.

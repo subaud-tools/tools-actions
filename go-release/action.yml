@@ -3,7 +3,7 @@ description: >-
   Builds a Go tool's binaries for darwin/linux x arm64/amd64 with its version
   stamped, signs and notarizes the macOS binaries, checks the stamp on the
   native binary, packages tarballs with .sha256 files and checksums.txt,
-  creates or updates the GitHub release, and publishes the tarballs and extra
+  creates or updates the GitHub release (unless github-release is false), and publishes the tarballs and extra
   assets to the family download contract (<tool>.tools/dl/<tool>/<version>/,
   moving /dl/<tool>/latest only for a created, non-prerelease release). Runs in the caller's job, so the
   job's `release` environment secrets and OIDC identity are the caller's own.
@@ -107,6 +107,10 @@ inputs:
     description: "Region for the downloads role."
     required: false
     default: us-east-1
+  github-release:
+    description: 'Create the GitHub release and upload its assets. "false" skips only that step (a private repo that publishes to /dl alone); signing, checksums and /dl are unchanged.'
+    required: false
+    default: "true"
   github-token:
     description: "Token for the GitHub release."
     required: false
@@ -167,6 +171,7 @@ runs:
         PRERELEASE: ${{ inputs.prerelease }}
         TITLE: ${{ inputs.release-title }}
         EXTRA_ASSETS: ${{ inputs.extra-assets }}
+        GITHUB_RELEASE: ${{ inputs.github-release }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: bash "$GITHUB_ACTION_PATH/github-release.sh"
     - name: Configure AWS credentials (downloads)
