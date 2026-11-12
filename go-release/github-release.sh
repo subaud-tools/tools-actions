@@ -2,11 +2,16 @@
 # Creates the GitHub release (CREATE=true) and uploads the packaged assets:
 # tarballs, their .sha256 files, checksums.txt and EXTRA_ASSETS. --clobber, so
 # an asset-rebuild run replaces a release's assets in place.
+# GITHUB_RELEASE=false skips all of it (a private repo publishes only to /dl).
 #
-# Env: TAG, CREATE, PRERELEASE, TITLE, EXTRA_ASSETS, GITHUB_REPOSITORY,
-#      GITHUB_SHA, GH_TOKEN.
+# Env: TAG, CREATE, PRERELEASE, TITLE, EXTRA_ASSETS, GITHUB_RELEASE,
+#      GITHUB_REPOSITORY, GITHUB_SHA, GH_TOKEN.
 set -euo pipefail
 shopt -s nullglob
+if [ "${GITHUB_RELEASE:-true}" = false ]; then
+  echo "github-release is false: no GitHub release created or uploaded."
+  exit 0
+fi
 if [ "${CREATE:-false}" = true ]; then
   args=(release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "${TITLE:-$TAG}" --generate-notes)
   [ "${PRERELEASE:-false}" = true ] && args+=(--prerelease)
