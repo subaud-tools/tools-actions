@@ -22,7 +22,7 @@ inputs:
     required: false
     default: ""
   github-token:
-    description: "Token for `gh release view` (version-file mode checks whether the tag is already released)."
+    description: "Unused since v0.15.0 (whether v<VERSION> is released is read from the tag on origin); kept so existing callers still pass it."
     required: false
     default: ${{ github.token }}
 
@@ -62,5 +62,4 @@ runs:
         VERSION_FILE: ${{ inputs.version-file }}
         DISPATCH_TAG: ${{ inputs.dispatch-tag }}
         EVENT: ${{ github.event_name }}
-        GH_TOKEN: ${{ inputs.github-token }}
       run: bash "$GITHUB_ACTION_PATH/resolve.sh"

@@ -3,7 +3,7 @@
 #   tag, version, tool (prefixed-tag only), commit, date, create, prerelease, skip
 #
 # MODE=version-file (kempt, muster, galley, hail): the VERSION file is the knob.
-#   push:               tag v<VERSION>; skip if that release already exists.
+#   push:               tag v<VERSION>; skip if that tag is already on origin.
 #   workflow_dispatch:  DISPATCH_TAG empty -> pre-release v<VERSION>-rc.<run>
 #                       (the dev channel: never "latest", never collides with
 #                       the v<VERSION> main publishes later);
@@ -13,7 +13,8 @@
 #   exist at cmd/<tool>. A version with a '-' is a pre-release.
 #
 # Env: MODE, EVENT, DISPATCH_TAG, VERSION_FILE (default VERSION),
-#      GITHUB_REF, GITHUB_REPOSITORY, GITHUB_RUN_NUMBER, GITHUB_OUTPUT.
+#      GITHUB_REF, GITHUB_RUN_NUMBER, GITHUB_OUTPUT. Needs an `origin` remote
+#      the job can read (actions/checkout sets it up).
 set -euo pipefail
 
 emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
@@ -37,10 +38,13 @@ case "${MODE:-}" in
       fi
     else
       tag="v$base"; prerelease=false
-      if out="$(gh release view "$tag" --repo "${GITHUB_REPOSITORY:?}" 2>&1)"; then
+      # Released = the tag is on origin. go-release creates it either way
+      # (gh release create, or a pushed tag when github-release is false).
+      rc=0; out="$(git ls-remote --exit-code --tags origin "refs/tags/$tag" 2>&1)" || rc=$?
+      if [ "$rc" -eq 0 ]; then
         echo "$tag is already released — nothing to do."
         create=false; skip=true
-      elif printf '%s' "$out" | grep -q "release not found"; then
+      elif [ "$rc" -eq 2 ]; then
         create=true; skip=false
       else
         die "cannot tell whether $tag exists: $out"
