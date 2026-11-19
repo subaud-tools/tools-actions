@@ -24,7 +24,16 @@ echo "$t \$*" >> "$W/calls"
 case "$t \$1" in
   "xcrun notarytool") [ "\$2" = submit ] && echo "  status: \${FAKE_NOTARY_STATUS:-Accepted}"; exit 0;;
   "security find-identity") echo '  1) ABC "Developer ID Application: Test (TEAM)"'; exit 0;;
-  "aws s3") [ "\$2" = cp ] && [ "\$3" = - ] && cat > "$W/latest-body"; exit 0;;
+  "aws s3")
+    [ "\$2" = cp ] && [ "\$3" = - ] && cat > "$W/latest-body"
+    if [ "\$2" = cp ] && [ "\$4" = - ]; then
+      # Reading the latest pointer: FAKE_AWS_READ_ERR fails it, FAKE_LATEST serves
+      # it, and neither means no pointer yet (the real CLI's missing-key error).
+      if [ -n "\${FAKE_AWS_READ_ERR:-}" ]; then echo "\$FAKE_AWS_READ_ERR" >&2; exit 1; fi
+      if [ -n "\${FAKE_LATEST:-}" ]; then printf '%s\n' "\$FAKE_LATEST"; exit 0; fi
+      echo "fatal error: An error occurred (404) when calling the HeadObject operation: Key \"\${3#s3://*/}\" does not exist" >&2; exit 1
+    fi
+    exit 0;;
 esac
 exit 0
 FAKE
@@ -179,6 +188,21 @@ check "an extra asset's .sha256 names the bare asset and verifies" 'grep -qE "^[
 check "latest written with the bare semver" 'grep -q "s3://bkt/dl/demo/latest" "$W/calls" && [ "$(cat "$W/latest-body")" = "1.2.3" ]'
 check "latest is short-TTL" 'grep "dl/demo/latest" "$W/calls" | grep -q "max-age=60,must-revalidate"'
 check "latest invalidated" 'grep -q "cloudfront create-invalidation --distribution-id EDIST --paths /dl/demo/latest" "$W/calls"'
+check "no pointer yet moves latest" 'grep -q "^aws s3 cp s3://bkt/dl/demo/latest -$" "$W/calls" && grep -q "^latest -> 1.2.3$" "$W/log"'
+# promote VERSION over a served pointer FAKE_LATEST (or a read error FAKE_AWS_READ_ERR)
+promote() { : > "$W/calls"; rm -f "$W/latest-body"; ( cd "$mod" && env DL_TOOL=demo BUCKET=bkt VERSION="$1" PROMOTE=true DISTRIBUTION_ID=EDIST "${@:2}" bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?; }
+moved='grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && grep -q "create-invalidation" "$W/calls"'
+left='! grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && ! grep -q "create-invalidation" "$W/calls"'
+promote 1.10.0 FAKE_LATEST=1.9.0
+check "a higher version moves latest (numerically: 1.10.0 over 1.9.0)" '[ $rc -eq 0 ] && '"$moved"' && [ "$(cat "$W/latest-body")" = "1.10.0" ]'
+promote 1.9.9 FAKE_LATEST=1.10.0
+check "a lower version leaves latest and says so" '[ $rc -eq 0 ] && '"$left"' && grep -q "^not moving /dl/demo/latest: it is already 1.10.0$" "$W/log" && grep -q "s3://bkt/dl/demo/1.9.9/" "$W/calls"'
+promote 1.2.3 FAKE_LATEST=1.2.3
+check "an equal version leaves latest" '[ $rc -eq 0 ] && '"$left"' && grep -q "^not moving /dl/demo/latest: it is already 1.2.3$" "$W/log"'
+promote 2.0.0 FAKE_AWS_READ_ERR="An error occurred (AccessDenied) when calling the GetObject operation: Access Denied"
+check "any other failure to read the pointer fails the step" '[ $rc -ne 0 ] && '"$left"' && grep -q "AccessDenied" "$W/log"'
+promote 2.0.0 FAKE_LATEST=garbage
+check "a pointer that is not a bare semver fails the step" '[ $rc -ne 0 ] && '"$left"''
 : > "$W/calls"
 ( cd "$mod" && env DL_TOOL=demo BUCKET=bkt VERSION=1.2.3-rc.4 PROMOTE=false DISTRIBUTION_ID=EDIST bash "$A/publish-dl.sh" ) > "$W/log" 2>&1
 check "PROMOTE=false never touches latest" '! grep -q "dl/demo/latest" "$W/calls" && ! grep -q "create-invalidation" "$W/calls"'
