@@ -187,6 +187,7 @@ runs:
         DL_TOOL: ${{ inputs.dl-tool }}
         BUCKET: ${{ inputs.dl-bucket }}
         VERSION: ${{ inputs.version }}
+        TAG: ${{ inputs.tag }}
         PROMOTE: ${{ inputs.create == 'true' && inputs.prerelease != 'true' }}
         DISTRIBUTION_ID: ${{ inputs.dl-distribution-id }}
         EXTRA_ASSETS: ${{ inputs.extra-assets }}

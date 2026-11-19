@@ -49,6 +49,21 @@ if [ "$1 $2" = "release upload" ]; then
   done
 fi
 FAKE
+# Fake git for publish-dl: ls-remote prints every tag in FAKE_TAGS, unfiltered
+# by the pattern (so the script's own exact filter is what's tested), or fails
+# with FAKE_LSREMOTE_FAIL; anything else goes to the real git.
+mkdir -p "$W/gitbin"
+cat > "$W/gitbin/git" <<FAKE
+#!/usr/bin/env bash
+if [ "\$1" = ls-remote ]; then
+  echo "git \$*" >> "$W/calls"
+  if [ -n "\${FAKE_LSREMOTE_FAIL:-}" ]; then echo "\$FAKE_LSREMOTE_FAIL" >&2; exit 128; fi
+  for t in \${FAKE_TAGS:-}; do printf '0123abcd\trefs/tags/%s\n' "\$t"; done
+  exit 0
+fi
+exec "$(command -v git)" "\$@"
+FAKE
+chmod +x "$W/gitbin/git"
 export W
 export PATH="$W/bin:$PATH"
 
@@ -169,7 +184,7 @@ check "action.yml: github-release input defaults to true and reaches the script"
 
 echo "== publish-dl"
 : > "$W/calls"
-( cd "$mod" && env DL_TOOL=demo BUCKET=bkt VERSION=1.2.3 PROMOTE=true DISTRIBUTION_ID=EDIST EXTRA_ASSETS='dist/*.zip' bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?
+( cd "$mod" && env PATH="$W/gitbin:$PATH" FAKE_TAGS="v1.2.3 v1.2.2" DL_TOOL=demo BUCKET=bkt VERSION=1.2.3 TAG=v1.2.3 PROMOTE=true DISTRIBUTION_ID=EDIST EXTRA_ASSETS='dist/*.zip' bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?
 check "publish succeeds" '[ $rc -eq 0 ]'
 check "18 versioned uploads (8 tarballs + 1 extra asset, each with a .sha256)" '[ "$(grep -c "s3://bkt/dl/demo/1.2.3/" "$W/calls")" -eq 18 ]'
 check "versioned paths are immutable" '! grep "s3://bkt/dl/demo/1.2.3/" "$W/calls" | grep -vq "max-age=31536000,immutable"'
@@ -179,6 +194,25 @@ check "an extra asset's .sha256 names the bare asset and verifies" 'grep -qE "^[
 check "latest written with the bare semver" 'grep -q "s3://bkt/dl/demo/latest" "$W/calls" && [ "$(cat "$W/latest-body")" = "1.2.3" ]'
 check "latest is short-TTL" 'grep "dl/demo/latest" "$W/calls" | grep -q "max-age=60,must-revalidate"'
 check "latest invalidated" 'grep -q "cloudfront create-invalidation --distribution-id EDIST --paths /dl/demo/latest" "$W/calls"'
+check "the release tags are listed from origin" 'grep -q "^git ls-remote --tags --refs origin refs/tags/v\*$" "$W/calls" && grep -q "^latest -> 1.2.3$" "$W/log"'
+# promote VERSION as TAG ($2) against origin's tags FAKE_TAGS (or FAKE_LSREMOTE_FAIL)
+promote() { : > "$W/calls"; rm -f "$W/latest-body"; ( cd "$mod" && env PATH="$W/gitbin:$PATH" DL_TOOL=demo BUCKET=bkt VERSION="$1" TAG="$2" PROMOTE=true DISTRIBUTION_ID=EDIST "${@:3}" bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?; }
+moved='grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && grep -q "create-invalidation" "$W/calls"'
+left='! grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && ! grep -q "create-invalidation" "$W/calls"'
+promote 1.10.0 v1.10.0 FAKE_TAGS="v1.9.0 v1.10.0 v1.2.0"
+check "the newest tag moves latest (numerically: 1.10.0 over 1.9.0)" '[ $rc -eq 0 ] && '"$moved"' && [ "$(cat "$W/latest-body")" = "1.10.0" ]'
+promote 1.9.9 v1.9.9 FAKE_TAGS="v1.9.9 v1.10.0"
+check "a version lower than an existing tag leaves latest and says so" '[ $rc -eq 0 ] && '"$left"' && grep -q "^not moving /dl/demo/latest: v1.10.0 is higher$" "$W/log" && grep -q "s3://bkt/dl/demo/1.9.9/" "$W/calls"'
+promote 1.2.3 v1.2.3 FAKE_TAGS="v1.2.3 v1.3.0-rc.1 v2.0.0-rc.4"
+check "a higher -rc tag does not hold latest back" '[ $rc -eq 0 ] && '"$moved"''
+promote 1.2.3 demo/v1.2.3 FAKE_TAGS="demo/v1.2.3 other/v9.0.0 v9.0.0 xdemo/v9.0.0"
+check "a <tool>/v prefix only counts its own tool's tags" '[ $rc -eq 0 ] && '"$moved"' && grep -q "^git ls-remote --tags --refs origin refs/tags/demo/v\*$" "$W/calls"'
+promote 1.2.3 v1.2.3 FAKE_TAGS="v1.2.3 proj/v9.0.0 v9.0.0x"
+check "a plain v prefix ignores proj/v tags" '[ $rc -eq 0 ] && '"$moved"''
+promote 1.2.3 v1.2.3 FAKE_LSREMOTE_FAIL="fatal: could not read Username for 'https://github.com'"
+check "a failed ls-remote fails the step" '[ $rc -ne 0 ] && '"$left"' && grep -q "could not read Username" "$W/log"'
+promote 1.2.3 v1.2.4 FAKE_TAGS="v1.2.3"
+check "a TAG that does not end with v<VERSION> fails the step" '[ $rc -ne 0 ] && '"$left"''
 : > "$W/calls"
 ( cd "$mod" && env DL_TOOL=demo BUCKET=bkt VERSION=1.2.3-rc.4 PROMOTE=false DISTRIBUTION_ID=EDIST bash "$A/publish-dl.sh" ) > "$W/log" 2>&1
 check "PROMOTE=false never touches latest" '! grep -q "dl/demo/latest" "$W/calls" && ! grep -q "create-invalidation" "$W/calls"'
