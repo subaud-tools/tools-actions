@@ -10,7 +10,7 @@ Releases a `.tools` Go binary: build every target with the version stamped, sign
 | notarize | one submission for every darwin binary; anything but `Accepted` fails |
 | package | `<name>_<os>_<arch>.tar.gz`, `.tar.gz.sha256` (two-space shasum, bare asset name), `checksums.txt` (+ `extra-assets`) |
 | GitHub release | created when `create`, `--prerelease` for an rc; assets uploaded with `--clobber`. Skipped when `github-release: "false"` (default `"true"`), which instead pushes the annotated tag `v<VERSION>` at the commit when `create` |
-| `/dl` | `/dl/<tool>/<version>/…` immutable: the tarballs, and each `extra-assets` file with its own `.sha256`; `/dl/<tool>/latest` (bare semver, 60 s) and a CloudFront invalidation **only** for a created, non-prerelease release, and only when its version is higher than the one `latest` already holds (or there is none yet): `latest` only moves up, so an older release published late leaves it alone and says `not moving /dl/<tool>/latest: it is already <current>` |
+| `/dl` | `/dl/<tool>/<version>/…` immutable: the tarballs, and each `extra-assets` file with its own `.sha256`; `/dl/<tool>/latest` (bare semver, 60 s) and a CloudFront invalidation **only** for a created, non-prerelease release, and only when no release tag on origin (`<prefix>X.Y.Z`, `-rc` tags not counted) is higher than its version: `latest` only moves up, compared with the tags, so an older release published late leaves it alone and says `not moving /dl/<tool>/latest: <prefix>X.Y.Z is higher` (the checkout needs origin and its credentials, as for `github-release: false`) |
 | cleanup | keychain, certificate and API key destroyed with `if: always()` |
 
 ```yaml
