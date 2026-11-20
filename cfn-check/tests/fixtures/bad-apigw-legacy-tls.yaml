@@ -1,0 +1,13 @@
+# rule: apigw_domain_no_legacy_tls
+# MUST FAIL: an API Gateway domain name that accepts TLS 1.0.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  DomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: api.example.com
+      DomainNameConfigurations:
+        - CertificateArn: arn:aws:acm:us-east-1:111122223333:certificate/11111111-2222-3333-4444-555555555555
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_0

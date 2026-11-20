@@ -1,0 +1,23 @@
+# rule: no_wildcard_iam
+# MUST FAIL: a whole service (ec2:*) on Resource "*" is not a read action.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "ec2:*"
+                Resource: "*"

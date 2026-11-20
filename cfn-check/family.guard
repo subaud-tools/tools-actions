@@ -1,0 +1,197 @@
+#
+# The .tools family rules for a CloudFormation template (cfn-guard 3.x).
+#
+#   cfn-guard validate -d <template> -r family.guard
+#
+#   no_wildcard_iam                No IAM statement has Action "*". Resource "*"
+#                                  only where AWS gives no resource to name.
+#   s3_block_public_access         Every bucket blocks all public access.
+#   dynamodb_ttl_and_pitr          Every table has expiry and point-in-time recovery.
+#   cloudfront_viewer_https_only   CloudFront serves viewers over HTTPS only.
+#   cloudfront_min_tls_not_legacy  CloudFront's own certificate refuses old TLS.
+#   apigw_domain_no_legacy_tls     An API Gateway domain name refuses TLS 1.0.
+#   log_groups_have_retention      Every declared log group has a retention.
+#
+# No rule names a resource of any one template: an exception is made by the
+# kind of action, here, or not at all. Each rule has a failing fixture in
+# tests/fixtures/, and tests/rules.sh fails when one has none.
+#
+
+#
+# IAM: no wildcard action, and a wildcard resource only where AWS gives none.
+#
+# Action "*" is never allowed. Resource "*" (alone or in a list) is allowed in
+# a statement only when EVERY action in it is one of:
+#   - a read action: <service>:Describe..., <service>:List... or
+#     <service>:Get..., including a trailing wildcard such as ec2:Describe*;
+#   - an action on the list below, which the AWS Service Authorization
+#     Reference shows with no resource type, so "*" is the only resource a
+#     statement can give it.
+# A statement that mixes one of those with any other action on "*" fails: split
+# it, and give the other action its resources.
+#
+# Checked: the inline policies of roles, users and groups, and the document of
+# AWS::IAM::Policy and AWS::IAM::ManagedPolicy. Action and Resource may each be
+# a string or a list. A Resource built by a function (!Sub, !GetAtt) is not the
+# literal "*" and is not judged here.
+#
+# To add an action: open its service's page in the reference, find the action
+# in the Actions table, and add it only if its "Resource types" cell is empty.
+# Name the page in a comment, as below. Each entry was read on 2026-11-19.
+#
+let read_action = /^[a-z0-9-]+:(Describe|List|Get)[A-Za-z0-9]*\*?$/
+
+let no_resource_actions = [
+  # https://docs.aws.amazon.com/service-authorization/latest/reference/list_awscertificatemanager.html
+  # RequestCertificate: no resource type (the certificate does not exist yet).
+  'acm:RequestCertificate',
+  # https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazoncloudfront.html
+  # Each of these has an empty "Resource types" cell.
+  'cloudfront:CreateDistribution',
+  'cloudfront:CreateKeyGroup',
+  'cloudfront:CreatePublicKey',
+  'cloudfront:CreateVpcOrigin',
+  'cloudfront:DeleteKeyGroup',
+  'cloudfront:DeletePublicKey',
+  'cloudfront:UpdateKeyGroup'
+]
+
+# The filter on Policies matters: a role with none would leave the query
+# unresolved, and cfn-guard would then SKIP the rule for the whole template.
+let inline_policy_statements = Resources[
+  Type in [ 'AWS::IAM::Role', 'AWS::IAM::User', 'AWS::IAM::Group' ]
+  Properties.Policies exists
+].Properties.Policies[*].PolicyDocument.Statement[*]
+let policy_statements = Resources[ Type in [ 'AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy' ] ].Properties.PolicyDocument.Statement[*]
+
+rule iam_statements_name_their_resources(statements) {
+  %statements {
+    when Action is_string { Action != '*' }
+    when Action is_list { Action[*] != '*' }
+
+    when Resource is_string {
+      when Resource == '*' {
+        when Action is_string {
+          Action == %read_action or
+          Action in %no_resource_actions
+        }
+        when Action is_list {
+          Action[*] {
+            this == %read_action or
+            this in %no_resource_actions
+          }
+        }
+      }
+    }
+    when Resource is_list {
+      when some Resource[*] == '*' {
+        when Action is_string {
+          Action == %read_action or
+          Action in %no_resource_actions
+        }
+        when Action is_list {
+          Action[*] {
+            this == %read_action or
+            this in %no_resource_actions
+          }
+        }
+      }
+    }
+  }
+}
+
+rule no_wildcard_iam {
+  when %inline_policy_statements !empty {
+    iam_statements_name_their_resources(%inline_policy_statements)
+  }
+  when %policy_statements !empty {
+    iam_statements_name_their_resources(%policy_statements)
+  }
+}
+
+#
+# S3: every bucket blocks all public access (all four settings true).
+#
+let s3_buckets = Resources[ Type == 'AWS::S3::Bucket' ]
+
+rule s3_block_public_access when %s3_buckets !empty {
+  %s3_buckets {
+    Properties.PublicAccessBlockConfiguration {
+      BlockPublicAcls == true
+      BlockPublicPolicy == true
+      IgnorePublicAcls == true
+      RestrictPublicBuckets == true
+    }
+  }
+}
+
+#
+# DynamoDB: every table has expiry (TTL) and point-in-time recovery on.
+#
+let ddb_tables = Resources[ Type == 'AWS::DynamoDB::Table' ]
+
+rule dynamodb_ttl_and_pitr when %ddb_tables !empty {
+  %ddb_tables {
+    Properties.TimeToLiveSpecification.Enabled == true
+    Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
+  }
+}
+
+#
+# CloudFront: viewers are served over HTTPS only, on every cache behavior.
+#
+let cloudfront_distributions = Resources[ Type == 'AWS::CloudFront::Distribution' ]
+
+rule cloudfront_viewer_https_only when %cloudfront_distributions !empty {
+  %cloudfront_distributions {
+    Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy
+      in [ 'redirect-to-https', 'https-only' ]
+
+    when Properties.DistributionConfig.CacheBehaviors exists {
+      Properties.DistributionConfig.CacheBehaviors[*].ViewerProtocolPolicy
+        in [ 'redirect-to-https', 'https-only' ]
+    }
+  }
+}
+
+#
+# CloudFront: a distribution with its own certificate sets a minimum protocol
+# version that is not an old TLS or SSL version.
+#
+rule cloudfront_min_tls_not_legacy when %cloudfront_distributions !empty {
+  %cloudfront_distributions {
+    when Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion exists {
+      Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion
+        not in [ 'SSLv3', 'TLSv1', 'TLSv1_2016', 'TLSv1.1_2016' ]
+    }
+  }
+}
+
+#
+# API Gateway: a domain name that sets a security policy does not set TLS 1.0.
+#
+let apigw_domain_names = Resources[ Type == 'AWS::ApiGatewayV2::DomainName' ]
+
+rule apigw_domain_no_legacy_tls when %apigw_domain_names !empty {
+  %apigw_domain_names {
+    when Properties.DomainNameConfigurations exists {
+      Properties.DomainNameConfigurations[*] {
+        when SecurityPolicy exists {
+          SecurityPolicy != 'TLS_1_0'
+        }
+      }
+    }
+  }
+}
+
+#
+# Logs: every declared log group sets RetentionInDays. Without it a log group
+# keeps its events for ever.
+#
+let log_groups = Resources[ Type == 'AWS::Logs::LogGroup' ]
+
+rule log_groups_have_retention when %log_groups !empty {
+  %log_groups {
+    Properties.RetentionInDays exists
+  }
+}

@@ -1,0 +1,15 @@
+# rule: no_wildcard_iam
+# MUST FAIL: the rule covers a policy resource's own document, not only a role's inline policies.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  WritePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: "*"

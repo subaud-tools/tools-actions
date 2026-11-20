@@ -1,0 +1,55 @@
+name: CloudFormation template check
+description: >-
+  The .tools family check for a CloudFormation template: cfn-lint, then
+  cfn-guard with the family rule file shipped with this action (no wildcard
+  IAM, private buckets, DynamoDB expiry and recovery, HTTPS-only CloudFront on
+  current TLS, log retention). Installs both tools at pinned versions
+  (cfn-guard checksum-verified). The calling job must check out the tree.
+
+inputs:
+  template:
+    description: "The template to check, relative to the repo root. Several paths may be given, separated by spaces or newlines."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install pinned cfn-guard
+      shell: bash
+      run: |
+        # Version and per-platform checksums come from versions.lock, the same
+        # file local.sh checks your tools against, so CI and `just verify` run
+        # one cfn-guard. The release tarball is checksum-verified; no install
+        # script is run.
+        set -euo pipefail
+        lock="$GITHUB_ACTION_PATH/versions.lock"
+        v="$(awk '$1=="cfn-guard"{print $2}' "$lock")"
+        os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        case "$(uname -m)" in arm64|aarch64) arch=arm64;; *) arch=amd64;; esac
+        asset="$(awk -v k="$os-$arch" '$1==k{print $2}' "$lock")"
+        want="$(awk -v k="$os-$arch" '$1==k{print $3}' "$lock")"
+        [ -n "$v" ] && [ -n "$asset" ] && [ -n "$want" ] || { echo "::error::cfn-check: versions.lock has no cfn-guard release for $os-$arch"; exit 1; }
+        curl -fsSL "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/${v}/${asset}" -o "$RUNNER_TEMP/cfn-guard.tar.gz"
+        got="$( (shasum -a 256 "$RUNNER_TEMP/cfn-guard.tar.gz" 2>/dev/null || sha256sum "$RUNNER_TEMP/cfn-guard.tar.gz") | awk '{print $1}')"
+        [ "$got" = "$want" ] || { echo "::error::cfn-check: cfn-guard checksum mismatch ($got)"; exit 1; }
+        tar -xzf "$RUNNER_TEMP/cfn-guard.tar.gz" -C "$RUNNER_TEMP"
+        mkdir -p "$RUNNER_TEMP/cfn-check-bin" && mv "$RUNNER_TEMP/${asset%.tar.gz}/cfn-guard" "$RUNNER_TEMP/cfn-check-bin/"
+        echo "$RUNNER_TEMP/cfn-check-bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/cfn-check-bin/cfn-guard" --version
+    - name: Install pinned cfn-lint
+      shell: bash
+      run: |
+        set -euo pipefail
+        v="$(awk '$1=="cfn-lint"{print $2}' "$GITHUB_ACTION_PATH/versions.lock")"
+        [ -n "$v" ] || { echo "::error::cfn-check: versions.lock names no cfn-lint version"; exit 1; }
+        command -v pipx >/dev/null || { echo "::error::cfn-check: pipx is not on this runner (it installs cfn-lint)"; exit 1; }
+        # Its own bin directory, first on PATH: a cfn-lint already on the
+        # runner is neither replaced nor used.
+        PIPX_BIN_DIR="$RUNNER_TEMP/cfn-check-bin" pipx install --force "cfn-lint==$v"
+        "$RUNNER_TEMP/cfn-check-bin/cfn-lint" --version
+    - name: Template check
+      shell: bash
+      env:
+        TEMPLATES: ${{ inputs.template }}
+        RULES: ${{ github.action_path }}/family.guard
+      run: bash "$GITHUB_ACTION_PATH/check.sh"

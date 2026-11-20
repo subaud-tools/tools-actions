@@ -1,0 +1,25 @@
+# rule: cloudfront_min_tls_not_legacy
+# MUST FAIL: a distribution whose viewer certificate accepts TLS 1.0.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Aliases:
+          - example.com
+        Origins:
+          - Id: origin
+            DomainName: origin.example.com
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:111122223333:certificate/11111111-2222-3333-4444-555555555555
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1

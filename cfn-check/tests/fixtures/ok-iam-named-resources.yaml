@@ -1,0 +1,30 @@
+# rule: no_wildcard_iam
+# MUST PASS: write actions on named resources, scalar and list forms.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: arn:aws:s3:::example-bucket/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource:
+                  - arn:aws:dynamodb:us-east-1:111122223333:table/example
+                  - arn:aws:dynamodb:us-east-1:111122223333:table/example/index/*

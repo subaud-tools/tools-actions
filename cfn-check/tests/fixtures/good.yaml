@@ -1,0 +1,90 @@
+# MUST PASS every rule, and cfn-lint: one of each resource the rules look at.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture that passes every family rule.
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: 30
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Aliases:
+          - example.com
+        Origins:
+          - Id: origin
+            DomainName: origin.example.com
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        ViewerCertificate:
+          AcmCertificateArn: !Sub "arn:${AWS::Partition}:acm:us-east-1:${AWS::AccountId}:certificate/11111111-2222-3333-4444-555555555555"
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+  DomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: api.example.com
+      DomainNameConfigurations:
+        - CertificateArn: !Sub "arn:${AWS::Partition}:acm:${AWS::Region}:${AWS::AccountId}:certificate/11111111-2222-3333-4444-555555555555"
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt Table.Arn
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - acm:RequestCertificate
+                Resource: "*"

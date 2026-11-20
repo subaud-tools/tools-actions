@@ -1,0 +1,13 @@
+# rule: s3_block_public_access
+# MUST FAIL: a bucket without all four public access blocks (hail's fixture).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-guard negative fixture - S3 bucket missing public access block.
+Resources:
+  ClientBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
