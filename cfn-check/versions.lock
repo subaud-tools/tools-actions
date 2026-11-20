@@ -1,0 +1,4 @@
+cfn-lint 1.60.1
+cfn-guard 3.3.0
+linux-amd64 cfn-guard-v3-x86_64-linux-latest.tar.gz ecf25d586c98057836fac28a8e498569f6daded8f386fd13327c82a4daa45d6e
+linux-arm64 cfn-guard-v3-aarch64-linux-latest.tar.gz 7b8a7b4befdf47e7f53c0023a8c79799b7d8dde69ab8a77ce3078211920c8ff4

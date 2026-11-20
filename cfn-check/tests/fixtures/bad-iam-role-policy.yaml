@@ -1,0 +1,16 @@
+# rule: no_wildcard_iam
+# MUST FAIL: AWS::IAM::RolePolicy, UserPolicy and GroupPolicy documents are read; here a RolePolicy with a write action on Resource "*".
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  WideRolePolicy:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      RoleName: some-role
+      PolicyName: fixture
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ec2:TerminateInstances
+            Resource: "*"

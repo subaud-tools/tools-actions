@@ -1,0 +1,35 @@
+# rule: no_wildcard_iam
+# MUST PASS: actions AWS gives no resource type, alone or with read actions, on Resource "*".
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm:RequestCertificate
+                  - acm:DescribeCertificate
+                Resource: "*"
+              - Effect: Allow
+                Action: cloudfront:CreatePublicKey
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateKeyGroup
+                  - cloudfront:CreateVpcOrigin
+                  - cloudfront:CreateDistribution
+                Resource:
+                  - "*"

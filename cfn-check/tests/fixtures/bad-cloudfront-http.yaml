@@ -1,0 +1,20 @@
+# rule: cloudfront_viewer_https_only
+# MUST FAIL: a distribution that serves plain HTTP (hail's fixture).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-guard negative fixture - CloudFront viewer allows plaintext.
+Resources:
+  ClientDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: client-s3
+            DomainName: example.s3.amazonaws.com
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: client-s3
+          ViewerProtocolPolicy: allow-all
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6

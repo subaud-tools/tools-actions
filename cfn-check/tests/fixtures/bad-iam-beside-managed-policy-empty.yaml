@@ -1,0 +1,23 @@
+# rule: no_wildcard_iam
+# MUST FAIL: an AWS::IAM::Policy with a write action on Resource "*" beside a managed policy with Statement: [] (the rule must not skip).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  EmptyManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement: []
+  WidePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: fixture
+      Roles:
+        - some-role
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ec2:TerminateInstances
+            Resource: "*"

@@ -256,6 +256,25 @@ jobs:
         shell: bash
         run: bash go-ci/tests/local.sh
 
+  cfn-check:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: cfn-check script tests (fake tools)
+        shell: bash
+        run: bash cfn-check/tests/test.sh
+      - name: cfn-check local runner tests
+        shell: bash
+        run: bash cfn-check/tests/local.sh
+      # The action itself, from this checkout: its pinned installs and the
+      # real cfn-lint and cfn-guard on a template that passes.
+      - uses: ./cfn-check
+        with:
+          template: cfn-check/tests/fixtures/good.yaml
+      - name: family.guard against its fixtures (the cfn-guard the action installed)
+        shell: bash
+        run: bash cfn-check/tests/rules.sh
+
   version-guard:
     runs-on: ubuntu-26.04
     steps:

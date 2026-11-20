@@ -1,0 +1,26 @@
+# rule: no_wildcard_iam
+# MUST FAIL: a write action on a Resource list that contains "*".
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Resources:
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                Resource:
+                  - arn:aws:ec2:us-east-1:111122223333:instance/i-0123456789abcdef0
+                  - "*"

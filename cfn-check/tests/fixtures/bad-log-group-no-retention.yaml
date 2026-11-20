@@ -1,0 +1,10 @@
+# rule: log_groups_have_retention
+# MUST FAIL: a log group that keeps events for ever (hail's fixture).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-guard negative fixture - Logs log group without RetentionInDays.
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: /hail/example/diagnostics

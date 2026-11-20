@@ -1,0 +1,39 @@
+# rule: no_wildcard_iam
+# MUST FAIL: an AWS::IAM::Policy with a write action on Resource "*" beside a managed policy whose PolicyDocument is an !If (the rule must not skip).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Parameters:
+  Extra:
+    Type: String
+    Default: "no"
+    AllowedValues: ["yes", "no"]
+Conditions:
+  WantExtra: !Equals [!Ref Extra, "yes"]
+Resources:
+  ConditionalManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument: !If
+        - WantExtra
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: arn:aws:s3:::fixture-bucket/*
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: arn:aws:s3:::fixture-bucket
+  WidePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: fixture
+      Roles:
+        - some-role
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ec2:TerminateInstances
+            Resource: "*"
