@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   # Pinned actionlint (release binary, checksum-verified). Dependabot can't
   # bump these env strings: bump the actionlint, shellcheck and yq pins by
