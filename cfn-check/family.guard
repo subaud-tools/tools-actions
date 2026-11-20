@@ -31,9 +31,15 @@
 # it, and give the other action its resources.
 #
 # Checked: the inline policies of roles, users and groups, and the document of
-# AWS::IAM::Policy and AWS::IAM::ManagedPolicy. Action and Resource may each be
-# a string or a list. A Resource built by a function (!Sub, !GetAtt) is not the
-# literal "*" and is not judged here.
+# AWS::IAM::Policy, ManagedPolicy, RolePolicy, UserPolicy and GroupPolicy.
+# Statement may be a list or a single map; Action and Resource may each be a
+# string or a list. A statement with no literal Action fails: one that uses
+# NotAction, one built by a function (an !If item, or Statement: !If), and one
+# whose Action is built by a function.
+#
+# Not judged: Effect (a Deny on "*" fails too), NotResource, a wildcard inside
+# an ARN (arn:aws:s3:::*), and a Resource built by a function (!Sub, !GetAtt),
+# which is not the literal "*".
 #
 # To add an action: open its service's page in the reference, find the action
 # in the Actions table, and add it only if its "Resource types" cell is empty.
@@ -56,16 +62,37 @@ let no_resource_actions = [
   'cloudfront:UpdateKeyGroup'
 ]
 
-# The filter on Policies matters: a role with none would leave the query
-# unresolved, and cfn-guard would then SKIP the rule for the whole template.
-let inline_policy_statements = Resources[
+# Every level of these queries is filtered to what is there to read. A query
+# that finds nothing to read in ONE resource (a role with no Policies, an empty
+# Statement, a document or policy written as an !If) is unresolved, and cfn-guard
+# then SKIPS the clause for the whole template, passing every other resource
+# unjudged. tests/fixtures/bad-iam-beside-*.yaml pin each of those forms, and
+# check.sh fails a template with IAM policies on which this rule is skipped.
+let inline_policies = Resources[
   Type in [ 'AWS::IAM::Role', 'AWS::IAM::User', 'AWS::IAM::Group' ]
   Properties.Policies exists
-].Properties.Policies[*].PolicyDocument.Statement[*]
-let policy_statements = Resources[ Type in [ 'AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy' ] ].Properties.PolicyDocument.Statement[*]
+].Properties.Policies[ PolicyDocument.Statement exists ]
+let policy_resources = Resources[
+  Type in [ 'AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy', 'AWS::IAM::RolePolicy', 'AWS::IAM::UserPolicy', 'AWS::IAM::GroupPolicy' ]
+  Properties.PolicyDocument.Statement exists
+]
+let inline_statement_lists = %inline_policies[
+  PolicyDocument.Statement is_list
+  PolicyDocument.Statement !empty
+].PolicyDocument.Statement[*]
+let inline_statement_maps = %inline_policies[ PolicyDocument.Statement is_struct ].PolicyDocument.Statement
+let policy_statement_lists = %policy_resources[
+  Properties.PolicyDocument.Statement is_list
+  Properties.PolicyDocument.Statement !empty
+].Properties.PolicyDocument.Statement[*]
+let policy_statement_maps = %policy_resources[ Properties.PolicyDocument.Statement is_struct ].Properties.PolicyDocument.Statement
 
 rule iam_statements_name_their_resources(statements) {
   %statements {
+    # A statement whose Action is not a literal string or list cannot be judged.
+    Action is_string or
+    Action is_list <<an IAM statement has no literal Action (it uses NotAction, or it or its Action is built by a function such as !If), so it cannot be judged>>
+
     when Action is_string { Action != '*' }
     when Action is_list { Action[*] != '*' }
 
@@ -101,11 +128,17 @@ rule iam_statements_name_their_resources(statements) {
 }
 
 rule no_wildcard_iam {
-  when %inline_policy_statements !empty {
-    iam_statements_name_their_resources(%inline_policy_statements)
+  when %inline_statement_lists !empty {
+    iam_statements_name_their_resources(%inline_statement_lists)
   }
-  when %policy_statements !empty {
-    iam_statements_name_their_resources(%policy_statements)
+  when %inline_statement_maps !empty {
+    iam_statements_name_their_resources(%inline_statement_maps)
+  }
+  when %policy_statement_lists !empty {
+    iam_statements_name_their_resources(%policy_statement_lists)
+  }
+  when %policy_statement_maps !empty {
+    iam_statements_name_their_resources(%policy_statement_maps)
   }
 }
 

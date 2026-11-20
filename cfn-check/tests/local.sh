@@ -39,7 +39,8 @@ tool cfn-lint 1.2.3; tool cfn-guard 4.5.6
 # A PATH with the fakes and the system tools only, so a real cfn-lint or
 # cfn-guard on this machine is never the one found.
 P="$W/bin:/usr/bin:/bin"
-run() { ( cd "$repo" && env PATH="$P" TOOLS_ACTIONS_BASE="file://$W/pub" XDG_CACHE_HOME="$W/cache" "$@" bash "$A/local.sh" contrib/t.yaml ) > "$W/log" 2>&1; }
+mkdir -p "$W/tmp"
+run() { ( cd "$repo" && env PATH="$P" TMPDIR="$W/tmp" TOOLS_ACTIONS_BASE="file://$W/pub" XDG_CACHE_HOME="$W/cache" "$@" bash "$A/local.sh" contrib/t.yaml ) > "$W/log" 2>&1; }
 
 echo "== runs the pinned version"
 run; rc=$?
@@ -47,6 +48,7 @@ check "runs the check at the ci.yml pin" '[ $rc -eq 0 ] && grep -q "check v9.9.9
 check "passes the template it was given" 'grep -q "TEMPLATES=contrib/t.yaml " "$W/log"'
 check "passes the fetched rule file" 'grep -q "RULES=$W/cache/tools-actions/v9.9.9/cfn-check/family.guard" "$W/log"'
 check "caches the fetched files" '[ -f "$W/cache/tools-actions/v9.9.9/cfn-check/check.sh" ] && [ -f "$W/cache/tools-actions/v9.9.9/cfn-check/versions.lock" ]'
+check "leaves no temporary files behind" '[ -z "$(ls -A "$W/tmp")" ]'
 
 echo "== uses the cache"
 rm -rf "$W/pub/v9.9.9"
@@ -67,6 +69,7 @@ check "no ci.yml fails and says so" '[ $rc -ne 0 ] && grep -q "ci.yml" "$W/log"'
 mkdir -p "$repo/.github/workflows"; pin v8.0.0
 run; rc=$?
 check "a version that cannot be fetched fails and names it" '[ $rc -ne 0 ] && grep -q "v8.0.0" "$W/log"'
+check "a failed fetch leaves no temporary files behind" '[ -z "$(ls -A "$W/tmp")" ]'
 check "a failed fetch leaves nothing in the cache" '[ ! -e "$W/cache/tools-actions/v8.0.0/cfn-check/.complete" ]'
 
 echo "== the tools on PATH must be the pinned versions"

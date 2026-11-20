@@ -27,11 +27,14 @@ ver="$(grep -oE 'subaud-tools/tools-actions/cfn-check@v[0-9]+\.[0-9]+\.[0-9]+' "
 base="${TOOLS_ACTIONS_BASE:-https://raw.githubusercontent.com/subaud-tools/tools-actions}"
 dir="${XDG_CACHE_HOME:-$HOME/.cache}/tools-actions/$ver/cfn-check"
 if [ ! -f "$dir/.complete" ]; then
-  tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/cfn-check.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
   for f in check.sh family.guard versions.lock; do
     curl -fsSL "$base/$ver/cfn-check/$f" -o "$tmp/$f" || die "could not fetch tools-actions $ver cfn-check/$f from $base"
   done
   mkdir -p "$dir" && cp "$tmp"/* "$dir/" && touch "$dir/.complete"
+  # Removed here, not in the trap alone: the exec below replaces this shell,
+  # and an EXIT trap does not run then.
+  rm -rf "$tmp"; trap - EXIT
 fi
 
 # have <tool>: the version of <tool> on PATH, or nothing.

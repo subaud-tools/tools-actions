@@ -59,9 +59,20 @@ reference and add it only if its "Resource types" cell is empty, with a comment
 naming the page.
 
 The rule reads the inline policies of roles, users and groups, and the document
-of `AWS::IAM::Policy` and `AWS::IAM::ManagedPolicy`. It does not read `Effect`
-(a `Deny` on `"*"` fails too), `NotAction` or `NotResource`, a resource built
-by a function (`!Sub "*"`), or resource policies such as a bucket policy.
+of `AWS::IAM::Policy`, `ManagedPolicy`, `RolePolicy`, `UserPolicy` and
+`GroupPolicy`. `Statement` may be a list or a single map.
+
+- A statement with no literal `Action` fails: one that uses `NotAction`, one
+  built by a function (an `!If` item in `Statement`, or `Statement: !If`), and
+  one whose `Action` is built by a function (`Action: !If [...]`).
+- Not judged: `Effect` (a `Deny` on `"*"` fails too), `NotResource`, a wildcard
+  inside an ARN (`arn:aws:s3:::*`), a resource built by a function
+  (`!Sub "*"`), and resource policies such as a bucket policy.
+
+cfn-guard skips a rule, with exit 0, when it finds nothing to read. So the
+check also fails when `no_wildcard_iam` is reported `SKIP` on a template that
+declares an IAM resource and a `PolicyDocument`: no statement was judged (for
+example the only policy has `Statement: []`).
 
 ## The same check locally
 
@@ -88,6 +99,7 @@ cfn-check:
 
 - `tests/rules.sh` (needs `cfn-guard`): every `tests/fixtures/bad-*.yaml` fails
   exactly the rule its first line names, `good.yaml` and every `ok-*.yaml`
-  pass, and every rule has a failing fixture.
+  pass with `no_wildcard_iam` reported `PASS` (not skipped), every rule has a
+  failing fixture, and `check.sh` fails each `skipped-*.yaml`.
 - `tests/test.sh`: `check.sh` with fake tools.
 - `tests/local.sh`: `local.sh` against a fake published version.

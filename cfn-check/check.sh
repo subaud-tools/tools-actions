@@ -15,6 +15,14 @@ rules="${RULES:?cfn-check: RULES is not set}"
 [ -f "$rules" ] || die "no rule file at $rules"
 for t in "${templates[@]}"; do [ -f "$t" ] || die "no template at $t"; done
 
+# has_iam_policies <template>: it declares an IAM resource and a policy document
+# (a PolicyDocument key; AssumeRolePolicyDocument is not one), so the IAM rule
+# has statements to judge.
+has_iam_policies() {
+  grep -q 'AWS::IAM::' "$1" && grep -qE '(^|[^A-Za-z0-9])PolicyDocument["'\'']?[[:space:]]*:' "$1"
+}
+
+out="$(mktemp "${TMPDIR:-/tmp}/cfn-check.XXXXXX")"; trap 'rm -f "$out"' EXIT
 rc=0
 for t in "${templates[@]}"; do
   echo "::group::cfn-lint $t"
@@ -22,7 +30,15 @@ for t in "${templates[@]}"; do
   echo "::endgroup::"
   echo "::group::cfn-guard $t"
   # --show-summary all: a rule cfn-guard skipped is listed, not left out.
-  cfn-guard validate --show-summary all -d "$t" -r "$rules" || { echo "::error::cfn-check: cfn-guard: $t breaks a family rule"; rc=1; }
+  grc=0; cfn-guard validate --show-summary all -d "$t" -r "$rules" > "$out" 2>&1 || grc=$?
+  cat "$out"
+  [ "$grc" -eq 0 ] || { echo "::error::cfn-check: cfn-guard: $t breaks a family rule"; rc=1; }
+  # cfn-guard skips a rule, with exit 0, when a query in it finds nothing to
+  # read. On a template with IAM policies that is a rule that judged nothing.
+  if grep -qE '/no_wildcard_iam +SKIP$' "$out" && has_iam_policies "$t"; then
+    echo "::error::cfn-check: cfn-guard skipped no_wildcard_iam on $t, which declares IAM policies: no IAM statement was judged. A policy with no statement, or one cfn-guard cannot read, does this; give every policy document a literal Statement."
+    rc=1
+  fi
   echo "::endgroup::"
 done
 [ "$rc" -eq 0 ] || exit "$rc"

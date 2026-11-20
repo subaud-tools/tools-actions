@@ -1,0 +1,51 @@
+# rule: no_wildcard_iam
+# MUST FAIL: a write action on Resource "*" beside a role whose policy item is an !If with AWS::NoValue (the rule must not skip).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: cfn-check fixture.
+Parameters:
+  Extra:
+    Type: String
+    Default: "no"
+    AllowedValues: ["yes", "no"]
+Conditions:
+  WantExtra: !Equals [!Ref Extra, "yes"]
+Resources:
+  OtherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - !If
+          - WantExtra
+          - PolicyName: extra
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: s3:GetObject
+                  Resource: arn:aws:s3:::fixture-bucket/*
+          - !Ref AWS::NoValue
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: fixture
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ec2:TerminateInstances
+                Resource: "*"
