@@ -1,8 +1,29 @@
+# The family's Dependabot file. The copy in tools-ops templates/family/ is the
+# source; the family check fails a repo whose file differs.
+#
+# Dependabot proposes every action the workflows use: our tools-actions (by
+# version tag) and the outside actions, which are pinned by commit with the
+# version in a trailing comment; Dependabot moves the commit and the comment
+# together. Only a tools-actions bump merges itself (the automerge job in
+# .github/workflows/dependabot.yml filters on its branch name); an outside
+# action's bump waits for a person. No groups: a group renames the branch.
+# tools-common is not here: a tool takes a new tools-common in the change that
+# needs it. Dependabot adds no-release itself, so version-guard passes and the
+# bump ships with the tool's next real release.
+#
+# The differences the check allows, and no others (it ignores comment lines):
+# - a tool promoted from dev (muster, galley) has `target-branch: dev` on the
+#   line after each `directory: /`;
+# - muda ends with the entry in templates/family/dependabot-muda.yml, for its
+#   Go libraries that are not the family's.
+# A repo the check does not cover (tools-ops, tools-actions, starter,
+# pi-extensions) carries this file as it is.
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    # "/" is .github/workflows; each composite action that runs an outside
-    # action is listed so its commit pin and version comment stay current.
+  - package-ecosystem: github-actions
+    # tools-actions only: "/" is .github/workflows; each composite action that
+    # runs an outside action is listed so its commit pin and version comment
+    # stay current.
     directories:
       - "/"
       - "/bump"
@@ -12,6 +33,9 @@ updates:
       - "/go-release"
       - "/images"
     schedule:
-      interval: "weekly"
+      interval: weekly
     cooldown:
       default-days: 3
+    labels:
+      - dependencies
+      - no-release
