@@ -64,7 +64,68 @@ fi
 exec "$(command -v git)" "\$@"
 FAKE
 chmod +x "$W/gitbin/git"
+# Fake aws for publish-dl: a bucket under $W/s3 (--no-overwrite keeps an
+# existing object, as S3 does on If-None-Match), and a KMS that signs with a
+# real Ed25519 test key, so the script's own verification is real.
+# FAKE_KMS_BAD signs other bytes, as a wrong key would.
+mkdir -p "$W/fakekms"
+cat > "$W/fakekms/main.go" <<'GOSRC'
+package main
+
+import (
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/base64"
+	"fmt"
+	"os"
+)
+
+func main() {
+	key := ed25519.NewKeyFromSeed([]byte("go-release-test-receipt-key-seed"))
+	switch os.Args[1] {
+	case "pub":
+		der, err := x509.MarshalPKIXPublicKey(key.Public())
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(base64.StdEncoding.EncodeToString(der))
+	case "sign":
+		msg, err := os.ReadFile(os.Args[2])
+		if err != nil {
+			panic(err)
+		}
+		if os.Getenv("FAKE_KMS_BAD") != "" {
+			msg = append(msg, 'x')
+		}
+		fmt.Println(base64.StdEncoding.EncodeToString(ed25519.Sign(key, msg)))
+	}
+}
+GOSRC
+( cd "$W/fakekms" && go build -o "$W/bin/fakekms" main.go ) || { echo "test.sh: could not build the fake KMS" >&2; exit 2; }
+cat > "$W/bin/aws" <<'FAKE'
+#!/usr/bin/env bash
+echo "aws $*" >> "$W/calls"
+obj() { printf '%s' "$W/s3/${1#s3://}"; }
+case "$1 $2" in
+  "s3 cp")
+    src="$3"; dst="$4"
+    if [ "$src" = - ]; then cat > "$W/latest-body"; exit 0; fi
+    if [[ $src == s3://* ]]; then
+      [ -z "${FAKE_S3_NOREAD:-}" ] && [ -f "$(obj "$src")" ] || { echo "fatal error: An error occurred (403) when calling the HeadObject operation: Forbidden" >&2; exit 1; }
+      if [ "$dst" = - ]; then cat "$(obj "$src")"; else cp "$(obj "$src")" "$dst"; fi
+      exit 0
+    fi
+    case " $* " in *" --no-overwrite "*) [ -e "$(obj "$dst")" ] && exit 0;; esac
+    mkdir -p "$(dirname "$(obj "$dst")")"
+    cp "$src" "$(obj "$dst")";;
+  "kms get-public-key") fakekms pub;;
+  "kms sign")
+    while [ $# -gt 0 ]; do [ "$1" = --message ] && msg="${2#fileb://}"; shift; done
+    fakekms sign "$msg";;
+esac
+FAKE
 export W
+export RECEIPT_KEY_ARN=arn:aws:kms:us-east-1:111122223333:key/test
 export PATH="$W/bin:$PATH"
 
 # A tiny module whose binary prints the family version line.
@@ -183,12 +244,15 @@ check "GITHUB_RELEASE=false asset rebuild (CREATE=false) creates no tag" '[ $rc 
 check "action.yml: github-release input defaults to true and reaches the script" 'grep -A3 "^  github-release:" "$A/action.yml" | grep -q "default: \"true\"" && grep -q "GITHUB_RELEASE: \${{ inputs.github-release }}" "$A/action.yml"'
 
 echo "== publish-dl"
-: > "$W/calls"
+# Uploads to the version's path; reads of what is published are the other lines.
+ups='grep -E "^aws s3 cp dist/[^ ]+ s3://bkt/dl/demo/1\.2\.3/" "$W/calls"'
+: > "$W/calls"; rm -rf "$W/s3"
 ( cd "$mod" && env PATH="$W/gitbin:$PATH" FAKE_TAGS="v1.2.3 v1.2.2" DL_TOOL=demo BUCKET=bkt VERSION=1.2.3 TAG=v1.2.3 PROMOTE=true DISTRIBUTION_ID=EDIST EXTRA_ASSETS='dist/*.zip' bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?
 check "publish succeeds" '[ $rc -eq 0 ]'
-check "18 versioned uploads (8 tarballs + 1 extra asset, each with a .sha256)" '[ "$(grep -c "s3://bkt/dl/demo/1.2.3/" "$W/calls")" -eq 18 ]'
-check "versioned paths are immutable" '! grep "s3://bkt/dl/demo/1.2.3/" "$W/calls" | grep -vq "max-age=31536000,immutable"'
-check ".sha256 is text/plain" '! grep "\.sha256 " "$W/calls" | grep -vq "content-type text/plain"'
+check "36 versioned uploads (8 tarballs + 1 extra asset, each with a .sha256, a .receipt and a .receipt.sig)" '[ "$('"$ups"' | wc -l | tr -d " ")" -eq 36 ]'
+check "versioned paths are immutable" '[ "$('"$ups"' | grep -vc "max-age=31536000,immutable")" -eq 0 ]'
+check "every versioned upload is create-only (--no-overwrite)" '[ "$('"$ups"' | grep -vc -- " --no-overwrite")" -eq 0 ]'
+check ".sha256 is text/plain" '[ "$('"$ups"' | grep "\.sha256 s3://" | grep -vc "content-type text/plain")" -eq 0 ]'
 check "extra assets are published beside the tarballs" 'grep -q "dist/lambda.zip s3://bkt/dl/demo/1.2.3/lambda.zip " "$W/calls" && grep -q "dist/lambda.zip.sha256 s3://bkt/dl/demo/1.2.3/lambda.zip.sha256 " "$W/calls"'
 check "an extra asset's .sha256 names the bare asset and verifies" 'grep -qE "^[0-9a-f]{64}  lambda.zip$" "$mod/dist/lambda.zip.sha256" && ( cd "$mod/dist" && shasum -a 256 -c lambda.zip.sha256 >/dev/null )'
 check "latest written with the bare semver" 'grep -q "s3://bkt/dl/demo/latest" "$W/calls" && [ "$(cat "$W/latest-body")" = "1.2.3" ]'
@@ -196,7 +260,7 @@ check "latest is short-TTL" 'grep "dl/demo/latest" "$W/calls" | grep -q "max-age
 check "latest invalidated" 'grep -q "cloudfront create-invalidation --distribution-id EDIST --paths /dl/demo/latest" "$W/calls"'
 check "the release tags are listed from origin" 'grep -q "^git ls-remote --tags --refs origin refs/tags/v\*$" "$W/calls" && grep -q "^latest -> 1.2.3$" "$W/log"'
 # promote VERSION as TAG ($2) against origin's tags FAKE_TAGS (or FAKE_LSREMOTE_FAIL)
-promote() { : > "$W/calls"; rm -f "$W/latest-body"; ( cd "$mod" && env PATH="$W/gitbin:$PATH" DL_TOOL=demo BUCKET=bkt VERSION="$1" TAG="$2" PROMOTE=true DISTRIBUTION_ID=EDIST "${@:3}" bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?; }
+promote() { : > "$W/calls"; rm -rf "$W/latest-body" "$W/s3"; ( cd "$mod" && env PATH="$W/gitbin:$PATH" DL_TOOL=demo BUCKET=bkt VERSION="$1" TAG="$2" PROMOTE=true DISTRIBUTION_ID=EDIST "${@:3}" bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?; }
 moved='grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && grep -q "create-invalidation" "$W/calls"'
 left='! grep -q "^aws s3 cp - s3://bkt/dl/demo/latest " "$W/calls" && ! grep -q "create-invalidation" "$W/calls"'
 promote 1.10.0 v1.10.0 FAKE_TAGS="v1.9.0 v1.10.0 v1.2.0"
@@ -220,6 +284,57 @@ check "PROMOTE=false never touches latest" '! grep -q "dl/demo/latest" "$W/calls
 ( cd "$mod" && env DL_TOOL=demo BINARY_PREFIXES="demo" BUCKET=bkt VERSION=1.2.3 PROMOTE=false DISTRIBUTION_ID=EDIST bash "$A/publish-dl.sh" ) > "$W/log" 2>&1
 check "tarballs of every packaged binary go under the tool's path" 'grep -q "dl/demo/1.2.3/demo-deploy_linux_amd64.tar.gz" "$W/calls"'
 
+echo "== receipts"
+# publish [ENV=...]: a full release of demo 1.2.3 into the fake bucket as it stands.
+publish() { : > "$W/calls"; rm -f "$W/latest-body"; ( cd "$mod" && env PATH="$W/gitbin:$PATH" FAKE_TAGS="v1.2.3" DL_TOOL=demo BUCKET=bkt VERSION=1.2.3 TAG=v1.2.3 PROMOTE=true DISTRIBUTION_ID=EDIST EXTRA_ASSETS='dist/*.zip' "$@" bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?; }
+line() { grep -n -- "$1" "$W/calls" | "$2" -1 | cut -d: -f1; }
+rm -rf "$W/s3"; publish
+hex="$(shasum -a 256 "$mod/dist/demo_linux_amd64.tar.gz" | cut -d' ' -f1)"
+check "a receipt is exactly tool, version, file, sha256 in that order, compact, one trailing newline" '[ $rc -eq 0 ] && printf "{\"tool\":\"demo\",\"version\":\"1.2.3\",\"file\":\"demo_linux_amd64.tar.gz\",\"sha256\":\"%s\"}\n" "$hex" | cmp -s - "$W/s3/bkt/dl/demo/1.2.3/demo_linux_amd64.tar.gz.receipt"'
+check "an extra asset gets a receipt; a .sha256 sidecar gets none" '[ -f "$W/s3/bkt/dl/demo/1.2.3/lambda.zip.receipt" ] && [ -f "$W/s3/bkt/dl/demo/1.2.3/lambda.zip.receipt.sig" ] && [ "$(find "$W/s3" -name "*.receipt" | wc -l | tr -d " ")" -eq 9 ] && [ -z "$(find "$W/s3" -name "*.sha256.receipt*")" ]'
+check "the receipt is signed with plain Ed25519 over its raw bytes (never the prehash algorithm)" '[ "$(grep -c "^aws kms sign " "$W/calls")" -eq 9 ] && grep -qx "aws kms sign --key-id $RECEIPT_KEY_ARN --message fileb://dist/demo_linux_amd64.tar.gz.receipt --message-type RAW --signing-algorithm ED25519_SHA_512 --query Signature --output text" "$W/calls" && ! grep -q "ED25519_PH" "$W/calls" "$A"/*.sh'
+check "the public key is fetched from KMS for the check" 'grep -qx "aws kms get-public-key --key-id $RECEIPT_KEY_ARN --query PublicKey --output text" "$W/calls"'
+check "the published .receipt.sig is the base64 signature KMS returned" 'cmp -s "$mod/dist/demo_linux_amd64.tar.gz.receipt.sig" "$W/s3/bkt/dl/demo/1.2.3/demo_linux_amd64.tar.gz.receipt.sig" && [ "$(base64 -d < "$W/s3/bkt/dl/demo/1.2.3/demo_linux_amd64.tar.gz.receipt.sig" | wc -c | tr -d " ")" -eq 64 ]'
+check "receipts are JSON, signatures text" '[ "$('"$ups"' | grep "\.receipt s3://" | grep -vc "content-type application/json")" -eq 0 ] && [ "$('"$ups"' | grep "\.receipt\.sig s3://" | grep -vc "content-type text/plain")" -eq 0 ]'
+check "files and sidecars first, receipts next, latest last" '[ "$('"$ups"' | grep -v "\.receipt" | wc -l | tr -d " ")" -eq 18 ] && [ "$(line "^aws s3 cp dist/[^ ]*\(gz\|zip\|sha256\) s3://" tail)" -lt "$(line "^aws kms " head)" ] && [ "$(line "dl/demo/1\.2\.3/" tail)" -lt "$(line "^aws s3 cp - s3://bkt/dl/demo/latest " head)" ]'
+
+rm -rf "$W/s3"; publish FAKE_KMS_BAD=1
+check "a signature that does not verify fails the release: no receipt published, latest not moved" '[ $rc -ne 0 ] && grep -q "::error::go-release: the receipt signature for demo.*does not verify" "$W/log" && [ -z "$(find "$W/s3" -name "*.receipt*")" ] && ! grep -q "dl/demo/latest" "$W/calls"'
+
+rm -rf "$W/s3"; publish RECEIPT_KEY_ARN=
+check "publish-dl without the receipt key uploads nothing" '[ $rc -ne 0 ] && ! grep -q "^aws " "$W/calls"'
+( env DL_TOOL=demo RECEIPT_KEY_ARN= bash "$A/require-receipt-key.sh" ) > "$W/log" 2>&1; rc=$?
+check "dl-tool without receipt-key-arn fails, naming the input" '[ $rc -ne 0 ] && grep -q "::error::go-release: receipt-key-arn is required when dl-tool is set" "$W/log"'
+( env DL_TOOL=demo bash "$A/require-receipt-key.sh" ) > "$W/log" 2>&1; rc=$?
+check "dl-tool with receipt-key-arn passes" '[ $rc -eq 0 ]'
+( env DL_TOOL= RECEIPT_KEY_ARN= bash "$A/require-receipt-key.sh" ) > "$W/log" 2>&1; rc=$?
+check "no dl-tool needs no receipt key" '[ $rc -eq 0 ]'
+check "action.yml: the receipt-key check is the first step, before anything is built" '[ "$(grep -n "require-receipt-key.sh" "$A/action.yml" | cut -d: -f1)" -lt "$(grep -n "actions/setup-go@" "$A/action.yml" | cut -d: -f1)" ] && grep -q "RECEIPT_KEY_ARN: \${{ inputs.receipt-key-arn }}" "$A/action.yml" && [ "$(grep -c "RECEIPT_KEY_ARN: \${{ inputs.receipt-key-arn }}" "$A/action.yml")" -eq 2 ]'
+
+rm -rf "$W/s3"; publish
+before="$(cd "$W/s3" && find . -type f -exec shasum -a 256 {} + | sort -k2)"
+publish
+check "a version already published with the same files is left as it is, and the run passes" '[ $rc -eq 0 ] && [ "$(cd "$W/s3" && find . -type f -exec shasum -a 256 {} + | sort -k2)" = "$before" ] && grep -q "^latest -> 1.2.3$" "$W/log"'
+cp "$mod/dist/demo_linux_amd64.tar.gz" "$W/keep.tar.gz"; cp "$mod/dist/demo_linux_amd64.tar.gz.sha256" "$W/keep.sha256"
+printf 'rebuilt' >> "$mod/dist/demo_linux_amd64.tar.gz"
+( cd "$mod/dist" && shasum -a 256 demo_linux_amd64.tar.gz > demo_linux_amd64.tar.gz.sha256 )
+publish
+check "a version already published with different files fails with one clear line and changes nothing" '[ $rc -ne 0 ] && [ "$(grep -c "::error::" "$W/log")" -eq 1 ] && grep -q "^::error::go-release: demo 1.2.3 is already published with different files (demo_linux_amd64.tar.gz.sha256); cut a new version$" "$W/log" && [ "$(cd "$W/s3" && find . -type f -exec shasum -a 256 {} + | sort -k2)" = "$before" ] && ! grep -q "dl/demo/latest" "$W/calls"'
+cp "$W/keep.sha256" "$mod/dist/demo_linux_amd64.tar.gz.sha256"
+publish
+check "a published file that differs under a matching sidecar fails too" '[ $rc -ne 0 ] && grep -q "already published with different files (demo_linux_amd64.tar.gz); cut a new version$" "$W/log" && ! grep -q "dl/demo/latest" "$W/calls"'
+cp "$W/keep.tar.gz" "$mod/dist/demo_linux_amd64.tar.gz"
+printf '{"tool":"demo","version":"1.2.3","file":"lambda.zip","sha256":"00"}\n' > "$W/s3/bkt/dl/demo/1.2.3/lambda.zip.receipt"
+publish
+check "a published receipt that differs fails" '[ $rc -ne 0 ] && grep -q "already published with different files (lambda.zip.receipt); cut a new version$" "$W/log" && ! grep -q "dl/demo/latest" "$W/calls"'
+rm -rf "$W/s3"; publish
+cp "$W/s3/bkt/dl/demo/1.2.3/demo_linux_amd64.tar.gz.receipt.sig" "$W/s3/bkt/dl/demo/1.2.3/lambda.zip.receipt.sig"
+publish
+check "a published signature that does not verify fails" '[ $rc -ne 0 ] && grep -q "::error::go-release: the published receipt signature for lambda.zip does not verify" "$W/log" && ! grep -q "dl/demo/latest" "$W/calls"'
+rm -rf "$W/s3"; publish FAKE_S3_NOREAD=1
+check "a role that cannot read what is published fails, saying so" '[ $rc -ne 0 ] && [ "$(grep -c "::error::" "$W/log")" -eq 1 ] && grep -q "^::error::go-release: could not read s3://bkt/dl/demo/1.2.3/.*\.sha256 back (the role needs s3:GetObject on dl/\*)$" "$W/log" && ! grep -q "dl/demo/latest" "$W/calls"'
+rm -rf "$W/s3"
+
 echo "== overlapping setup TAR extra"
 printf 'setup' > "$W/setup.toml"
 tar -C "$W" -czf "$mod/dist/demo_setup.tar.gz" setup.toml
@@ -231,7 +346,7 @@ cat "$W/log"
 check "overlapping TAR uploads without duplicate argument HTTP422" '[ $rc -eq 0 ] && [ "$(grep "^gh release upload" "$W/calls" | tr " " "\n" | grep -cx "dist/demo_setup.tar.gz")" -eq 1 ]'
 : > "$W/calls"
 ( cd "$mod" && env DL_TOOL=demo BUCKET=bkt VERSION=1.2.3 PROMOTE=false EXTRA_ASSETS='dist/demo_setup.tar.gz dist/*.zip' bash "$A/publish-dl.sh" ) > "$W/log" 2>&1; rc=$?
-check "overlapping TAR and sidecar each copied once" '[ $rc -eq 0 ] && [ "$(grep -c "^aws s3 cp dist/demo_setup.tar.gz " "$W/calls")" -eq 1 ] && [ "$(grep -c "^aws s3 cp dist/demo_setup.tar.gz.sha256 " "$W/calls")" -eq 1 ] && [ "$(grep -c "s3://bkt/dl/demo/1.2.3/" "$W/calls")" -eq 20 ]'
+check "overlapping TAR and sidecar each copied once" '[ $rc -eq 0 ] && [ "$(grep -c "^aws s3 cp dist/demo_setup.tar.gz " "$W/calls")" -eq 1 ] && [ "$(grep -c "^aws s3 cp dist/demo_setup.tar.gz.sha256 " "$W/calls")" -eq 1 ] && [ "$('"$ups"' | wc -l | tr -d " ")" -eq 40 ]'
 check "setup sidecar verifies and rebuild does not promote" '( cd "$mod/dist" && shasum -a 256 -c demo_setup.tar.gz.sha256 >/dev/null ) && ! grep -q "latest" "$W/calls"'
 
 echo "== sign-setup and cleanup"

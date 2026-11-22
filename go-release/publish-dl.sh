@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 # Publishes every packaged tarball and its .sha256, and each EXTRA_ASSETS file
 # with a .sha256 written here, to the family download contract:
-# s3://<bucket>/dl/<tool>/<version>/<asset> (immutable, long TTL).
+# s3://<bucket>/dl/<tool>/<version>/<asset> (immutable, long TTL), then a
+# signed receipt beside each (sign-receipts.sh). A version is write-once
+# (dl-put.sh): what is already published is compared, never overwritten, so
+# a re-run or an asset rebuild with the same files passes and one with
+# different files fails.
 # With PROMOTE=true (a created, non-prerelease release) it also writes
 # /dl/<tool>/latest = the bare semver (short TTL) and invalidates it, but
 # only when no release tag on origin (<prefix>X.Y.Z, the prefix being TAG
 # without v$VERSION) is higher than VERSION: latest only moves up. A failed
 # tag listing fails the step. An rc pre-release or an asset rebuild publishes
-# versioned paths only.
+# versioned paths only. latest is written last, so it never names a version
+# without receipts.
 #
-# Env: DL_TOOL, BUCKET, VERSION, TAG (with PROMOTE=true), PROMOTE (true|false), DISTRIBUTION_ID,
+# Env: DL_TOOL, BUCKET, VERSION, RECEIPT_KEY_ARN, TAG (with PROMOTE=true), PROMOTE (true|false), DISTRIBUTION_ID,
 #      EXTRA_ASSETS (newline/space-separated globs, already in dist/).
 set -euo pipefail
 sum() { if command -v shasum >/dev/null; then shasum -a 256 "$@"; else sha256sum "$@"; fi; }
-: "${DL_TOOL:?}" "${BUCKET:?}" "${VERSION:?}"
+: "${DL_TOOL:?}" "${BUCKET:?}" "${VERSION:?}" "${RECEIPT_KEY_ARN:?RECEIPT_KEY_ARN is required: a /dl release publishes signed receipts}"
 shopt -s nullglob
 files=(dist/*.tar.gz)
 [ ${#files[@]} -gt 0 ] || { echo "::error::go-release: no tarballs in dist/ to publish"; exit 1; }
@@ -23,12 +28,13 @@ collect_assets "${files[@]}"
 for f in ${extras[@]+"${extras[@]}"}; do
   ( cd dist && sum "$(basename "$f")" > "$(basename "$f").sha256" )
 done
-immutable='public,max-age=31536000,immutable'
-for f in "${assets[@]}"; do
-  base="$(basename "$f")"
-  aws s3 cp "$f"        "s3://$BUCKET/dl/$DL_TOOL/$VERSION/$base"        --cache-control "$immutable"
-  aws s3 cp "$f.sha256" "s3://$BUCKET/dl/$DL_TOOL/$VERSION/$base.sha256" --cache-control "$immutable" --content-type text/plain
-done
+# shellcheck source=go-release/dl-put.sh
+source "$(dirname "${BASH_SOURCE[0]}")/dl-put.sh"
+# The sidecars go first: a version published with different files fails
+# here, before any of this run's files is sent.
+for f in "${assets[@]}"; do put_once "$f.sha256" --content-type text/plain; done
+for f in "${assets[@]}"; do put_once "$f"; done
+bash "$(dirname "${BASH_SOURCE[0]}")/sign-receipts.sh" "${assets[@]}"
 if [ "${PROMOTE:-false}" = true ]; then
   : "${DISTRIBUTION_ID:?DISTRIBUTION_ID is required to move latest}"
   semver='^[0-9]+\.[0-9]+\.[0-9]+$'

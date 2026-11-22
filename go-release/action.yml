@@ -5,7 +5,7 @@ description: >-
   native binary, packages tarballs with .sha256 files and checksums.txt,
   creates or updates the GitHub release (unless github-release is false), and publishes the tarballs and extra
   assets to the family download contract (<tool>.tools/dl/<tool>/<version>/,
-  moving /dl/<tool>/latest only for a created, non-prerelease release). Runs in the caller's job, so the
+  write-once, each file with a receipt signed by the family KMS key; moving /dl/<tool>/latest only for a created, non-prerelease release). Runs in the caller's job, so the
   job's `release` environment secrets and OIDC identity are the caller's own.
   Feed it release-version's outputs; skip the step when release-version says
   skip. The calling job must check out the tree and grant contents: write and
@@ -103,6 +103,10 @@ inputs:
     description: "CloudFront distribution to invalidate /dl/<tool>/latest on."
     required: false
     default: ""
+  receipt-key-arn:
+    description: "KMS key that signs the release receipts (pass vars.RELEASE_RECEIPT_KEY_ARN). Required when dl-tool is set: the action fails before building without it."
+    required: false
+    default: ""
   aws-region:
     description: "Region for the downloads role."
     required: false
@@ -119,6 +123,12 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Require the receipt key for a /dl release
+      shell: bash
+      env:
+        DL_TOOL: ${{ inputs.dl-tool }}
+        RECEIPT_KEY_ARN: ${{ inputs.receipt-key-arn }}
+      run: bash "$GITHUB_ACTION_PATH/require-receipt-key.sh"
     - if: inputs.setup-go == 'true'
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
@@ -191,6 +201,7 @@ runs:
         PROMOTE: ${{ inputs.create == 'true' && inputs.prerelease != 'true' }}
         DISTRIBUTION_ID: ${{ inputs.dl-distribution-id }}
         EXTRA_ASSETS: ${{ inputs.extra-assets }}
+        RECEIPT_KEY_ARN: ${{ inputs.receipt-key-arn }}
       run: bash "$GITHUB_ACTION_PATH/publish-dl.sh"
     - name: Destroy the signing material
       if: always()
