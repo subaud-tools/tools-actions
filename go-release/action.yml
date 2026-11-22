@@ -120,7 +120,7 @@ runs:
   using: composite
   steps:
     - if: inputs.setup-go == 'true'
-      uses: actions/setup-go@v7.0.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: ${{ inputs.go-version-file }}
     - name: Import the Developer ID certificate
@@ -176,7 +176,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/github-release.sh"
     - name: Configure AWS credentials (downloads)
       if: inputs.dl-tool != ''
-      uses: aws-actions/configure-aws-credentials@v6.3.0
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         role-to-assume: ${{ inputs.dl-role-arn }}
         aws-region: ${{ inputs.aws-region }}

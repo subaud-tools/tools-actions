@@ -16,9 +16,16 @@ change here.
 
 ## Pinning
 
-- Every `uses:` in this repo's own workflows is pinned to an **exact**
-  `vX.Y.Z` release tag (resolved with `gh api repos/<owner>/<repo>/releases/latest`),
-  never a branch, a major-version tag, or `@main`.
+- Every `uses:` of an outside action (GitHub-owned or third-party), in this
+  repo's workflows and in every composite `action.yml`, is pinned to a **full
+  40-character commit** with the version in a trailing comment:
+  `owner/action@<sha> # vX.Y.Z`. Take the commit from the action's own repo
+  (`gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing an annotated
+  tag) and check the tag points at it. Never a tag, a branch, or `@main`.
+- Our own actions (`subaud-tools/tools-actions/...`, `./<action>`) stay on an
+  exact `vX.Y.Z` release tag or the local path, never a commit.
+- A composite action that gains an outside `uses:` is added to `directories:`
+  in `.github/dependabot.yml`.
 - Every `runs-on:` runner is an **exact** label (e.g. `ubuntu-26.04`),
   never `-latest`.
 - Actions published from this repo must document the same expectation for

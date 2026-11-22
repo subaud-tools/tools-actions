@@ -225,8 +225,8 @@ jobs:
   verify-images:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: subaud-tools/tools-actions/images@v0.16.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: build
           cdk-out: cdk.out
@@ -241,15 +241,15 @@ jobs:
   build-images:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: subaud-tools/tools-actions/images@v0.16.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: build
           cdk-out: cdk.out
           setup-buildx: "true"
           ecr-login-accounts: "111111111111"
           args: --mode push --cache readwrite --registry 111111111111.dkr.ecr.us-east-1.amazonaws.com/cdk-hnb659fds-container-assets-111111111111-us-east-1
-      - uses: subaud-tools/tools-actions/images@v0.16.0
+      - uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: assert-present
           cdk-out: cdk.out
@@ -268,20 +268,20 @@ jobs:
   promote:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: promote
-        uses: subaud-tools/tools-actions/images@v0.16.0
+        uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: promote
           cdk-out: cdk.out
           ecr-login-accounts: "111111111111 222222222222"
-      - uses: subaud-tools/tools-actions/images@v0.16.0
+      - uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: assert-present
           cdk-out: cdk.out
           ecr-login-accounts: "222222222222"
           args: --account 222222222222
-      - uses: subaud-tools/tools-actions/images@v0.16.0
+      - uses: subaud-tools/tools-actions/images@v0.16.1
         with:
           command: check-deployed
           cdk-out: cdk.out
@@ -293,5 +293,5 @@ jobs:
 Pin this action to an exact release tag, never a branch:
 
 ```yaml
-- uses: subaud-tools/tools-actions/images@v0.16.0
+- uses: subaud-tools/tools-actions/images@v0.16.1
 ```
