@@ -1,0 +1,49 @@
+# The family's Dependabot workflow. The copy in tools-ops templates/family/ is
+# the source; the family check fails a repo whose file differs.
+#
+# The differences the check allows, and no others (it ignores comment lines):
+# - the tools-actions version, which follows the repo's other tools-actions
+#   pins (the check fails mixed versions in one repo);
+# - a tool promoted from dev (muster, galley) has `branches: ["dev"]` and
+#   `target-branch: dev`, since its Dependabot pull requests go to dev.
+#
+# automerge: a Dependabot bump of our own tools-actions arms auto-merge and
+# lands when the required checks pass. Every other Dependabot pull request
+# waits for a person.
+# stale: one issue lists the Dependabot pull requests open longer than 14 days.
+name: Dependabot
+on:
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "17 6 * * 1"
+permissions: {}
+jobs:
+  automerge:
+    name: Auto-merge tools-actions bumps
+    if: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/github_actions/subaud-tools/tools-actions') }}
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: subaud-tools/tools-actions/dependabot-automerge@v0.17.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: main
+          merge-method: squash
+          allowed-update-types: version-update:semver-patch version-update:semver-minor
+          allowed-ecosystems: github_actions github-actions
+  stale:
+    name: List stale Dependabot pull requests
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - uses: subaud-tools/tools-actions/dependabot-stale@v0.17.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-days: "14"
