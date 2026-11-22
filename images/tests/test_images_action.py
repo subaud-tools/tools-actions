@@ -4,7 +4,7 @@ The action runs this action's own ``images.py`` (beside its ``action.yml``,
 invoked via ``$GITHUB_ACTION_PATH``) inside the calling job. It owns no AWS
 credentials (the calling job does), reads the ECR ``region`` from the images
 config (a project fact, never an input default), pins every third-party action
-to an exact ``vX.Y.Z`` tag, and every ``run`` step is a strict bash step.
+by commit, and every ``run`` step is a strict bash step.
 
 Where ``actionlint`` is available (binary, else ``uvx --from actionlint-py
 actionlint``) the suite also lints a generated caller workflow that *uses* the
@@ -40,7 +40,7 @@ EXPECTED_INPUTS: dict[str, object] = {
     "setup-buildx": "false",
 }
 
-_VERSION_PIN = re.compile(r"@v\d+\.\d+\.\d+$")
+_COMMIT_PIN = re.compile(r"@[0-9a-f]{40}$")
 
 
 @pytest.fixture
@@ -71,11 +71,11 @@ def test_images_action_contract(action_doc: dict) -> None:
     blob = yaml.safe_dump(action_doc)
     assert "configure-aws-credentials" not in blob
 
-    # Every third-party action is pinned to an exact vX.Y.Z tag.
+    # Every third-party action is pinned by commit.
     used = [step["uses"] for step in steps if "uses" in step]
     assert used, "expected at least the buildx setup action"
     for uses in used:
-        assert _VERSION_PIN.search(uses), f"{uses} is not pinned to vX.Y.Z"
+        assert _COMMIT_PIN.search(uses), f"{uses} is not pinned to a commit"
 
     # Every run step is a strict bash step.
     run_steps = [step for step in steps if "run" in step]
@@ -260,7 +260,7 @@ def test_actionlint_on_caller_workflow(tmp_path: Path) -> None:
                 "  build:",
                 "    runs-on: ubuntu-26.04",
                 "    steps:",
-                "      - uses: actions/checkout@v7.0.1",
+                "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
                 "      - uses: ./images",
                 "        with:",
                 "          command: build",

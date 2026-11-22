@@ -45,7 +45,7 @@ EXPECTED_INPUTS: dict[str, object] = {
     "root": ".",
 }
 
-_VERSION_PIN = re.compile(r"@v\d+\.\d+\.\d+$")
+_COMMIT_PIN = re.compile(r"@[0-9a-f]{40}$")
 
 
 @pytest.fixture
@@ -76,9 +76,9 @@ def test_toolchain_action_contract(action_doc: dict) -> None:
     blob = yaml.safe_dump(action_doc)
     assert "configure-aws-credentials" not in blob
 
-    # Every third-party action (if any) is pinned to an exact vX.Y.Z tag.
+    # Every third-party action (if any) is pinned by commit.
     for uses in [step["uses"] for step in steps if "uses" in step]:
-        assert _VERSION_PIN.search(uses), f"{uses} is not pinned to vX.Y.Z"
+        assert _COMMIT_PIN.search(uses), f"{uses} is not pinned to a commit"
 
     # Every run step is a strict bash step.
     run_steps = [step for step in steps if "run" in step]
@@ -234,7 +234,7 @@ def test_actionlint_on_caller_workflow(tmp_path: Path) -> None:
                 "  toolchain:",
                 "    runs-on: ubuntu-26.04",
                 "    steps:",
-                "      - uses: actions/checkout@v7.0.1",
+                "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
                 "      - uses: ./toolchain",
                 "",
             ]

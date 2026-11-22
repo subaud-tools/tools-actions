@@ -16,7 +16,7 @@
 #     token, whatever ref the workflow was dispatched from (Review Focus 4);
 #   - a guard step, first, fails any publish_branch but publish (the
 #     script hard-codes that branch for its push);
-#   - every `uses:` is an exact vX.Y.Z;
+#   - every `uses:` is pinned by commit;
 #   - the README caller snippet pins this repo's VERSION, passes exactly the
 #     action's inputs, and is clean under actionlint.
 # Usage: action.sh   (exit 0 = all assertions pass)
@@ -108,12 +108,12 @@ check "checkout uses the token input" '[ "$(yq -r "$CHECKOUT | .with.token" "$AC
 check "setup-node uses node_version and the npm registry" \
   '[ "$(yq -r "$SETUP_NODE | .with.node-version" "$ACTION")" = "\${{ inputs.node_version }}" ] && [ "$(yq -r "$SETUP_NODE | .with.registry-url" "$ACTION")" = "https://registry.npmjs.org" ]'
 
-echo "== every uses: is an exact vX.Y.Z"
+echo "== every uses: is pinned by commit"
 uses_list="$(yq -r '.. | select(tag == "!!map" and has("uses")) | .uses' "$ACTION")"
 check "action.yml has uses: entries" '[ -n "$uses_list" ]'
 while IFS= read -r u; do
   [ -n "$u" ] || continue
-  check "pinned exactly: $u" '[[ "$u" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+  check "pinned by commit: $u" '[[ "$u" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$ ]]'
 done <<<"$uses_list"
 
 echo "== script env (Review Focus 2, 3)"

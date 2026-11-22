@@ -12,9 +12,9 @@ date to stamp, and create / prerelease / skip. Feed its outputs to
 | `prefixed-tag` | push of `<tool>/vX.Y.Z` | one tool's release; a `-` in the version = pre-release |
 
 ```yaml
-- uses: actions/checkout@v7.0.1
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 - id: rel
-  uses: subaud-tools/tools-actions/release-version@v0.16.0
+  uses: subaud-tools/tools-actions/release-version@v0.16.1
   with:
     mode: version-file
     dispatch-tag: ${{ inputs.tag }}

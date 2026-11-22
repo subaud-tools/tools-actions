@@ -146,7 +146,7 @@ runs:
     # anti-recursion filtered).
     - name: Mint installation token
       id: app_token
-      uses: actions/create-github-app-token@v3.2.0
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
       with:
         client-id: ${{ inputs.app_client_id }}
         private-key: ${{ inputs.app_private_key }}
@@ -168,7 +168,7 @@ runs:
 
     - name: Checkout base branch
       id: checkout
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ inputs.base_branch }}
         token: ${{ steps.app_token.outputs.token }}
@@ -201,7 +201,7 @@ runs:
     - name: Install uv
       id: uv
       if: ${{ env.SKIP != 'true' }}
-      uses: astral-sh/setup-uv@v10.2.0
+      uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
         enable-cache: true
         cache-suffix: ${{ github.workflow }}-${{ github.job }}
@@ -240,7 +240,7 @@ runs:
     - name: Configure AWS credentials (OIDC)
       id: oidc
       if: ${{ env.SKIP != 'true' && inputs.private_index != '' }}
-      uses: aws-actions/configure-aws-credentials@v6.3.0
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         role-to-assume: ${{ inputs.index_role_arn }}
         aws-region: ${{ env.PI_REGION }}

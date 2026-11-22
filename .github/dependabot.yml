@@ -1,7 +1,16 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" is .github/workflows; each composite action that runs an outside
+    # action is listed so its commit pin and version comment stay current.
+    directories:
+      - "/"
+      - "/bump"
+      - "/dependabot-automerge"
+      - "/fork-sync"
+      - "/go-ci"
+      - "/go-release"
+      - "/images"
     schedule:
       interval: "weekly"
     cooldown:

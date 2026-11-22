@@ -43,8 +43,8 @@ FIXTURES = ACTION_DIR / "tests" / "fixtures"
 # wiring's output names can be checked against the action's own contract.
 FETCH_METADATA_ACTION = FIXTURES / "fetch-metadata-v2.5.0-action.yml"
 
-# The exact v2 tag of dependabot/fetch-metadata (matches the reviewed source).
-FETCH_METADATA_PIN = "dependabot/fetch-metadata@v2.5.0"
+# The commit of dependabot/fetch-metadata v2.5.0 (matches the reviewed source).
+FETCH_METADATA_PIN = "dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a"
 
 # The permissions each action a README caller uses actually needs (I2: every job
 # in each README is checked, not just the auto-merge one).
@@ -106,12 +106,12 @@ def test_is_a_composite_action():
     assert doc["runs"]["using"] == "composite"
 
 
-def test_fetch_metadata_pinned_to_exact_v2_tag():
+def test_fetch_metadata_pinned_to_the_v2_5_0_commit():
     doc = _load(ACTION_YML)
     uses = [s["uses"] for s in doc["runs"]["steps"] if "uses" in s]
     assert uses == [FETCH_METADATA_PIN], uses
     for u in uses:
-        assert re.search(r"@v\d+\.\d+\.\d+$", u), f"{u} is not pinned to an exact vX.Y.Z tag"
+        assert re.search(r"@[0-9a-f]{40}$", u), f"{u} is not pinned to a commit"
 
 
 def test_never_checks_out_pr_code():

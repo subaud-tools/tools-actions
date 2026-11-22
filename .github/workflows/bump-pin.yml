@@ -115,7 +115,7 @@ jobs:
     steps:
       - name: Bump pin, relock, open PR, auto-merge, await
         id: bump
-        uses: subaud-tools/tools-actions/bump@v0.16.0
+        uses: subaud-tools/tools-actions/bump@v0.16.1
         with:
           package: ${{ inputs.package }}
           version: ${{ inputs.version }}
@@ -140,7 +140,7 @@ jobs:
         id: stall_checkout
         if: ${{ failure() || cancelled() }}
         continue-on-error: true
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.base_branch }}
           sparse-checkout: ${{ inputs.config }}

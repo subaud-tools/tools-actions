@@ -76,7 +76,7 @@ def _readme_caller_block() -> str:
             return block
     raise AssertionError("no reusable-workflow caller block found in the README")
 
-_VERSION_PIN = re.compile(r"@v\d+\.\d+\.\d+$")
+_COMMIT_PIN = re.compile(r"@[0-9a-f]{40}$")
 
 # The exact composite inputs (and their defaults). ``None`` marks a required
 # input with no default.
@@ -176,7 +176,7 @@ def test_action_third_party_pins_are_exact() -> None:
     used = [s["uses"] for s in doc["runs"]["steps"] if "uses" in s]
     assert used, "expected third-party action steps"
     for uses in used:
-        assert _VERSION_PIN.search(uses), f"{uses} is not pinned to vX.Y.Z"
+        assert _COMMIT_PIN.search(uses), f"{uses} is not pinned to a commit"
 
 
 def test_action_scripts_exist_beside_it() -> None:

@@ -46,7 +46,7 @@ jobs:
   test:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run the checks
         run: ./run-checks.sh
       - name: Compute tree
@@ -57,7 +57,7 @@ jobs:
         run: touch "$RUNNER_TEMP/tested-tree"
       - name: Record tested tree
         if: success()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tested-tree-${{ steps.tree.outputs.tree }}-${{ github.base_ref }}
           path: ${{ runner.temp }}/tested-tree
@@ -105,9 +105,9 @@ jobs:
     outputs:
       tested: ${{ steps.lookup.outputs.tested }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: lookup
-        uses: subaud-tools/tools-actions/tested-tree@v0.16.0
+        uses: subaud-tools/tools-actions/tested-tree@v0.16.1
         with:
           base: main
 
@@ -116,7 +116,7 @@ jobs:
     if: needs.tested-tree.outputs.tested != 'true'
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: ./run-checks.sh
 
   deploy:

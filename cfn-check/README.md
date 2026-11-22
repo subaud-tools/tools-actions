@@ -15,8 +15,8 @@ jobs:
   cfn:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: subaud-tools/tools-actions/cfn-check@v0.16.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: subaud-tools/tools-actions/cfn-check@v0.16.1
         with:
           template: contrib/cloudformation/stack.yaml
 ```

@@ -25,7 +25,7 @@ jobs:
   lint:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pinned actionlint
         shell: bash
         run: |
@@ -64,8 +64,8 @@ jobs:
   fork-sync:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.20.0"
       - name: Install pinned actionlint
@@ -99,7 +99,7 @@ jobs:
   tested-tree:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pinned actionlint
         shell: bash
         run: |
@@ -122,8 +122,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install pinned actionlint
@@ -151,8 +151,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install pinned actionlint
@@ -180,8 +180,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install pinned actionlint
@@ -216,7 +216,7 @@ jobs:
   release-version:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: release-version tests
         shell: bash
         run: bash release-version/tests/test.sh
@@ -224,8 +224,8 @@ jobs:
   go-release:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
       - name: go-release tests
@@ -235,8 +235,8 @@ jobs:
   go-ci:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
       - name: Install pinned golangci-lint (for the family-config test)
@@ -262,7 +262,7 @@ jobs:
   cfn-check:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: cfn-check script tests (fake tools)
         shell: bash
         run: bash cfn-check/tests/test.sh
@@ -281,7 +281,7 @@ jobs:
   version-guard:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: version-guard tests
         shell: bash
         run: bash version-guard/tests/test.sh
@@ -293,8 +293,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install test deps
@@ -311,8 +311,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install pinned actionlint
@@ -351,8 +351,8 @@ jobs:
       matrix:
         python-version: ["3.12.14", "3.14.7"]
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: Install pinned actionlint

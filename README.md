@@ -55,9 +55,26 @@ Callers must pin the action to an exact release tag, never a branch or
 - uses: subaud-tools/tools-actions/<action>@vX.Y.Z
 ```
 
-`<action>` is the directory name, e.g. `subaud-tools/tools-actions/fork-sync@v0.16.0`.
+`<action>` is the directory name, e.g. `subaud-tools/tools-actions/fork-sync@v0.16.1`.
 Floating references (`@main`, `@v1`, no tag at all) are not supported and
 must not be used.
+
+Two kinds of reference, two rules:
+
+- **Our own actions, by release tag.** `subaud-tools/tools-actions/<action>@vX.Y.Z`,
+  as above.
+- **Outside actions, by commit with a version comment.** Every GitHub-owned or
+  third-party action that this repo runs, in a composite `action.yml` or a
+  workflow, is pinned to a full 40-character commit with its version in a
+  trailing comment, the form Dependabot maintains:
+
+  ```yaml
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  ```
+
+  A tag in someone else's repo can be moved; a commit cannot. The commit is
+  taken from the action's own repo at that tag. `testlib/tests/test_outside_pins.py`
+  fails a tag-pinned outside action.
 
 ## Releases
 
@@ -70,11 +87,13 @@ versioning.
 
 ## Dependabot
 
-This repo's own `.github/workflows/*.yml` pin `uses:` references to exact
-versions. Dependabot's `github-actions` ecosystem entry (see
-`.github/dependabot.yml`) opens PRs to bump those pins on a weekly cadence
-with a cooldown, so this repo's own CI/release workflows stay current the
-same way any caller's fork of these actions would.
+This repo's workflows and composite actions pin outside `uses:` references
+by commit (see Pinning). Dependabot's `github-actions` ecosystem entry (see
+`.github/dependabot.yml`) opens PRs on a weekly cadence with a cooldown that
+move each commit and its version comment together. It lists `/` for
+`.github/workflows` and the directory of every composite action that runs an
+outside action, since Dependabot reads an `action.yml` only in a listed
+directory.
 
 Consumers of these actions get updates the same way: point Dependabot's
 `github-actions` ecosystem at the caller repo, and it will propose bumping
