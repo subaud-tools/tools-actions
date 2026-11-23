@@ -170,7 +170,10 @@ def test_policy_values_are_inputs_not_project_facts():
         "allowed-update-types",
         "allowed-ecosystems",
         "allow-docker-digest",
+        "allowed-dependencies",
     }
+    # Empty by default: no dependency-name filter, so existing callers are unchanged.
+    assert inputs["allowed-dependencies"]["default"] == ""
     # No calling-project fact (repo name/org/branch/package/check name) baked in.
     assert "schuettc" not in ACTION_YML.read_text()
 
@@ -446,6 +449,8 @@ def test_policy_step_env_wiring_is_exact():
     assert env["TITLE"] == "${{ github.event.pull_request.title }}"
     assert env["BASE_REF"] == "${{ github.event.pull_request.base.ref }}"
     assert env["TARGET_BRANCH"] == "${{ inputs.target-branch }}"
+    assert env["DEPENDENCY_NAMES"] == "${{ steps.meta.outputs.dependency-names }}"
+    assert env["ALLOWED_DEPENDENCIES"] == "${{ inputs.allowed-dependencies }}"
 
 
 def test_policy_step_reads_only_real_fetch_metadata_outputs():

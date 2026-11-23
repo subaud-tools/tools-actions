@@ -46,6 +46,14 @@ inputs:
       a PR from any other ecosystem is skipped. Must not be empty.
     required: false
     default: "docker github-actions uv pip npm"
+  allowed-dependencies:
+    description: >-
+      Space/comma-separated dependency names (as fetch-metadata reports them,
+      e.g. owner/repo for an action) that may auto-merge. Empty (the default)
+      means no filter. When set, a PR merges only if every dependency it updates
+      is on the list.
+    required: false
+    default: ""
   allow-docker-digest:
     description: >-
       Auto-merge docker digest bumps (package-ecosystem docker with an empty
@@ -131,6 +139,8 @@ runs:
         ALLOWED_UPDATE_TYPES: ${{ inputs.allowed-update-types }}
         ALLOWED_ECOSYSTEMS: ${{ inputs.allowed-ecosystems }}
         ALLOW_DOCKER_DIGEST: ${{ inputs.allow-docker-digest }}
+        DEPENDENCY_NAMES: ${{ steps.meta.outputs.dependency-names }}
+        ALLOWED_DEPENDENCIES: ${{ inputs.allowed-dependencies }}
       run: |
         set -euo pipefail
         DECISION=0

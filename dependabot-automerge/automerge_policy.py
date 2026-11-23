@@ -43,6 +43,12 @@ Environment
   (empty update-type + empty new-version) apart from a docker *tag* change that
   fetch-metadata also can't parse (e.g. ``Bump python from `bookworm` to
   `trixie```), which stays a loud failure.
+* ``ALLOWED_DEPENDENCIES`` — space/comma-separated dependency names that may
+  auto-merge. Empty (the default) means no filter. When set, a PR merges only
+  if every name in ``DEPENDENCY_NAMES`` is on the list; a PR naming any other
+  dependency, or none, is skipped.
+* ``DEPENDENCY_NAMES``     — ``steps.meta.outputs.dependency-names``, the
+  comma-separated names fetch-metadata reports for the PR.
 * ``ALLOW_DOCKER_DIGEST``  — ``true``/``false``. A docker *digest* bump carries
   an empty update-type AND an empty new-version; docker is ungrouped (one PR per
   image) so such a PR whose ``TITLE`` matches Dependabot's digest-bump shape
@@ -122,6 +128,8 @@ def decide(
     target_branch: str,
     new_version: str = "",
     title: str = "",
+    allowed_dependencies: set[str] | None = None,
+    dependency_names: str = "",
 ) -> tuple[int, str]:
     """Return ``(exit_code, reason)`` for a single PR.
 
@@ -149,6 +157,13 @@ def decide(
         return SKIP, (
             f"ecosystem {ecosystem!r} is not in the allowed-ecosystems list"
         )
+    if allowed_dependencies:
+        names = _split(dependency_names)
+        if not names or not set(names) <= allowed_dependencies:
+            return SKIP, (
+                f"dependencies {dependency_names!r} are not all in the "
+                "allowed-dependencies list"
+            )
     if update_type and update_type in allowed_types:
         return MERGE, f"update-type {update_type} is in the allow-list"
     if allow_docker_digest and ecosystem == "docker" and update_type == "":
@@ -241,6 +256,8 @@ def main() -> int:
         target_branch,
         new_version,
         title,
+        set(_split(os.environ.get("ALLOWED_DEPENDENCIES", ""))),
+        os.environ.get("DEPENDENCY_NAMES", ""),
     )
     if code == MISUSE:
         print(f"::error::{reason}", file=sys.stderr)
