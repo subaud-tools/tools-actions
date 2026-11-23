@@ -22,7 +22,8 @@ PR is Dependabot's own before doing anything. The tested policy decision lives i
 2. Runs `dependabot/fetch-metadata@v2.5.0` (an exact pin) to read the PR's
    `update-type` and `package-ecosystem`.
 3. Evaluates the policy: merge when the PR targets `target-branch`, its ecosystem
-   is in `allowed-ecosystems`, and either the `update-type` is in
+   is in `allowed-ecosystems`, every dependency it updates is in
+   `allowed-dependencies` (when that is set), and either the `update-type` is in
    `allowed-update-types` **or** it is an ungrouped docker **digest** bump and
    `allow-docker-digest` is true. fetch-metadata@v2.5.0 can't parse a digest
    bump's backticked commit message (`` Bumps node from `2fe369e` to `0e0ff40`. ``),
@@ -48,6 +49,7 @@ PR is Dependabot's own before doing anything. The tested policy decision lives i
 | `merge-method` | no | `squash` | How auto-merge lands the PR: `squash`, `merge` or `rebase`. Validated up front. |
 | `allowed-update-types` | no | `version-update:semver-patch version-update:semver-minor` | Space/comma-separated fetch-metadata update-types that may auto-merge. Add `version-update:semver-major` to auto-merge majors (they wait by default). Must be non-empty and every token must be `version-update:semver-{patch,minor,major}`. |
 | `allowed-ecosystems` | no | `docker github-actions uv pip npm` | Space/comma-separated package-ecosystems whose PRs may auto-merge; any other ecosystem is skipped. Must not be empty. |
+| `allowed-dependencies` | no | `""` | Space/comma-separated dependency names (as fetch-metadata's `dependency-names` reports them, e.g. `subaud-tools/tools-actions`) that may auto-merge. Empty means no filter; when set, a PR merges only if every dependency it updates is on the list. |
 | `allow-docker-digest` | no | `true` | Auto-merge docker digest bumps (docker ecosystem with an empty update-type and empty new-version whose PR title matches Dependabot's `` Bump <image> from `<hex>` to `<hex>` `` shape). `true`/`false`. |
 
 Everything is a **policy** input; no calling-project fact (repo, org, branch,
@@ -95,7 +97,7 @@ jobs:
       contents: write # enable auto-merge on the PR
       pull-requests: write # mark the PR for auto-merge
     steps:
-      - uses: subaud-tools/tools-actions/dependabot-automerge@v0.17.0
+      - uses: subaud-tools/tools-actions/dependabot-automerge@v0.18.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: dev
@@ -112,7 +114,7 @@ jobs:
       pull-requests: read # list open Dependabot PRs
       issues: write # open / update / close the tracking issue
     steps:
-      - uses: subaud-tools/tools-actions/dependabot-stale@v0.17.0
+      - uses: subaud-tools/tools-actions/dependabot-stale@v0.18.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           stale-days: "14"

@@ -434,3 +434,39 @@ def test_allowed_update_types_accepts_commas():
         }
     )
     assert result.returncode == MERGE
+
+
+# -- allowed-dependencies: an optional dependency-name filter -------------------
+
+
+def test_allowed_dependencies_filters_on_dependency_names():
+    """With allowed-dependencies set, a PR merges only when every name
+    fetch-metadata reports is on the list; a PR naming any other dependency, or
+    none, waits. Empty means no filter, so existing callers are unchanged."""
+    ours = {"subaud-tools/tools-actions"}
+    patch = "version-update:semver-minor"
+    assert decide(DEPENDABOT, patch, "github-actions", DEFAULT_ALLOWED, True,
+                  DEFAULT_ECOSYSTEMS, TARGET, TARGET,
+                  allowed_dependencies=ours,
+                  dependency_names="subaud-tools/tools-actions")[0] == MERGE
+    for names in ("actions/setup-go", "subaud-tools/tools-actions, actions/setup-go", ""):
+        code, reason = decide(DEPENDABOT, patch, "github-actions", DEFAULT_ALLOWED, True,
+                              DEFAULT_ECOSYSTEMS, TARGET, TARGET,
+                              allowed_dependencies=ours, dependency_names=names)
+        assert code == SKIP, names
+        assert "allowed-dependencies" in reason
+    assert decide(DEPENDABOT, patch, "github-actions", DEFAULT_ALLOWED, True,
+                  DEFAULT_ECOSYSTEMS, TARGET, TARGET,
+                  dependency_names="actions/setup-go")[0] == MERGE
+
+
+def test_script_allowed_dependencies_from_env():
+    env = {**DEFAULT_ENV, "ACTOR": DEPENDABOT, "PACKAGE_ECOSYSTEM": "github-actions",
+           "UPDATE_TYPE": "version-update:semver-minor",
+           "ALLOWED_DEPENDENCIES": "subaud-tools/tools-actions"}
+    assert _run({**env, "DEPENDENCY_NAMES": "subaud-tools/tools-actions"}).returncode == MERGE
+    outside = _run({**env, "DEPENDENCY_NAMES": "actions/setup-go"})
+    assert outside.returncode == SKIP
+    assert outside.stdout.startswith("skip ")
+    unset = _run({**env, "ALLOWED_DEPENDENCIES": "", "DEPENDENCY_NAMES": "actions/setup-go"})
+    assert unset.returncode == MERGE
