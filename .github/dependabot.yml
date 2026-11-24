@@ -39,3 +39,14 @@ updates:
     labels:
       - dependencies
       - no-release
+  - package-ecosystem: npm
+    # tools-actions only: skill-check pins the npm yaml package pi ships, so a
+    # bump here should follow pi's own; check pi's yaml before merging one.
+    directory: "/skill-check"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    labels:
+      - dependencies
+      - no-release

@@ -1,0 +1,10 @@
+{
+  "name": "skill-check",
+  "private": true,
+  "description": "Fails on any SKILL.md front matter pi cannot load. Pins the yaml package pi ships.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "yaml": "2.9.0"
+  }
+}
