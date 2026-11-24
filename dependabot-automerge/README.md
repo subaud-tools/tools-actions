@@ -97,7 +97,7 @@ jobs:
       contents: write # enable auto-merge on the PR
       pull-requests: write # mark the PR for auto-merge
     steps:
-      - uses: subaud-tools/tools-actions/dependabot-automerge@v0.18.0
+      - uses: subaud-tools/tools-actions/dependabot-automerge@v0.19.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: dev
@@ -114,7 +114,7 @@ jobs:
       pull-requests: read # list open Dependabot PRs
       issues: write # open / update / close the tracking issue
     steps:
-      - uses: subaud-tools/tools-actions/dependabot-stale@v0.18.0
+      - uses: subaud-tools/tools-actions/dependabot-stale@v0.19.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           stale-days: "14"
