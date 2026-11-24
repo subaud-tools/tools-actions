@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# The family Go gate, in order: gofmt, go vet, golangci-lint (config verified
+# The family Go gate, in order: skills (every tracked SKILL.md loads in pi),
+# gofmt, go vet, golangci-lint (config verified
 # first, because a config golangci-lint cannot parse falls back silently and
 # lints nothing), go test (-race, -count=1: never cached), and a CGO_ENABLED=0 build per release target.
 #
 # Env: PACKAGES (default ./..., minus anything under node_modules), RACE (true|false), TARGETS, FAMILY_CONFIG
-#      (used when the repo has no .golangci.yml/.golangci.yaml), SKIP_LINT.
+#      (used when the repo has no .golangci.yml/.golangci.yaml), SKIP_LINT,
+#      SKILL_CHECK_DIR (default: the skill-check beside this script's directory),
+#      SKILL_CHECK_CACHE (skill-check's npm install; see skill-check/run.sh).
 set -euo pipefail
+skill_check="${SKILL_CHECK_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/skill-check}"
 # Versions are stamped through -ldflags, never by Go's VCS stamping, which
 # fails in a worktree whose repository is bare (exit status 128).
 export GOFLAGS="${GOFLAGS:+$GOFLAGS }-buildvcs=false"
@@ -21,6 +25,19 @@ if [ "$pkgs" = ./... ]; then
 fi
 step() { echo "::group::$1"; }
 end() { echo "::endgroup::"; }
+
+step skills
+# First, before any Go: a SKILL.md pi cannot load is skipped by pi with only a
+# warning, so the gate fails on it here (skill-check/README.md).
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "go-ci: not a git repository, no skills checked"
+elif [ -n "$(git ls-files -- '*SKILL.md')" ]; then
+  [ -f "$skill_check/run.sh" ] || { echo "::error::go-ci: no skill-check at $skill_check"; exit 1; }
+  bash "$skill_check/run.sh"
+else
+  echo "go-ci: no SKILL.md tracked, no skills to check"
+fi
+end
 
 step gofmt
 unformatted="$(find . -name '*.go' -not -path '*/node_modules/*' -not -path '*/.worktrees/*' \

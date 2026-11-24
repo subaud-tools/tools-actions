@@ -134,6 +134,24 @@ printf '//go:build linux\n\npackage lib\n\nfunc g() { notDefined() }\n' > "$W/li
 run "$W/lib"; rc=$?
 check "a library file that does not build on one target fails the cross-build" '[ $rc -ne 0 ] && grep -q "notDefined" "$W/log"'
 
+echo "== skills (the real skill-check beside go-ci)"
+# The first step: a tracked SKILL.md pi cannot load fails the gate before Go.
+export SKILL_CHECK_CACHE="$W/skc"
+mkmod "$W/s" "$clean"; mkdir -p "$W/s/skills/billet"
+printf -- '---\nname: billet\ndescription: Sets billet up. Use when the user says: set up billet\n---\n' > "$W/s/skills/billet/SKILL.md"
+( cd "$W/s" && git init -q . && git add -A ) >/dev/null 2>&1; : > "$W/lint-calls"
+run "$W/s"; rc=$?
+check "a module with a broken SKILL.md fails the gate" '[ $rc -ne 0 ] && grep -q "::error file=skills/billet/SKILL.md,line=3::Nested mappings" "$W/log"'
+check "the skills step runs before go vet and lint" '! grep -q "go vet" "$W/log" && [ ! -s "$W/lint-calls" ]'
+printf -- '---\nname: billet\ndescription: "Sets billet up. Use when the user says: set up billet"\n---\n' > "$W/s/skills/billet/SKILL.md"
+run "$W/s"; rc=$?
+check "the same module with the skill fixed passes" '[ $rc -eq 0 ] && grep -q "1 SKILL.md files checked" "$W/log" || { tail -5 "$W/log"; false; }'
+mkmod "$W/m" "$clean"; git -C "$W/m" init -q .
+run "$W/m"; rc=$?
+check "a repo with no SKILL.md skips the step and says so" '[ $rc -eq 0 ] && grep -q "no SKILL.md tracked" "$W/log"'
+run "$W/s" SKILL_CHECK_DIR="$W/nowhere"; rc=$?
+check "SKILL_CHECK_DIR names the skill-check to run" '[ $rc -ne 0 ] && grep -q "$W/nowhere" "$W/log"'
+
 echo "== the family config itself (real golangci-lint)"
 if [ -n "${REAL_GOLANGCI_LINT:-}" ]; then
   # Branch work in this family happens in <repo>/.worktrees/<branch>. The

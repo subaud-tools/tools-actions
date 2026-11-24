@@ -20,6 +20,8 @@ release:
   packages and publishes a Go tool to its GitHub release and download page.
 - [`go-ci`](go-ci/README.md): the family Go gate (gofmt, vet, golangci-lint,
   race tests, cross-build), and `go-ci/local.sh` to run it locally.
+- [`skill-check`](skill-check/README.md): fails on any tracked `SKILL.md` pi
+  cannot load or warns about, read exactly as pi reads it (go-ci runs it too).
 - [`cfn-check`](cfn-check/README.md): the family CloudFormation template check
   (cfn-lint, then cfn-guard with the family rule file), and `cfn-check/local.sh`
   to run it locally.
@@ -55,7 +57,7 @@ Callers must pin the action to an exact release tag, never a branch or
 - uses: subaud-tools/tools-actions/<action>@vX.Y.Z
 ```
 
-`<action>` is the directory name, e.g. `subaud-tools/tools-actions/fork-sync@v0.18.0`.
+`<action>` is the directory name, e.g. `subaud-tools/tools-actions/fork-sync@v0.19.0`.
 Floating references (`@main`, `@v1`, no tag at all) are not supported and
 must not be used.
 

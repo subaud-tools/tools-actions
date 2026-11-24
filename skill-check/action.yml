@@ -1,0 +1,26 @@
+name: Skill check
+description: >-
+  Fails on any SKILL.md that git tracks whose front matter pi cannot load or
+  warns about, read exactly as pi reads it (pi's front-matter split, the npm
+  yaml package pi ships, pi's name and description rules), with the file, the
+  line and pi's own message. Needs node and npm on the runner (GitHub's
+  hosted images carry both). The calling job must check out the tree.
+
+inputs:
+  cache:
+    description: "Directory for the locked npm install (keyed by package-lock.json)."
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Skill check
+      shell: bash
+      env:
+        CACHE_INPUT: ${{ inputs.cache }}
+      run: |
+        set -euo pipefail
+        SKILL_CHECK_CACHE="${CACHE_INPUT:-$RUNNER_TEMP/skill-check}"
+        export SKILL_CHECK_CACHE
+        bash "$GITHUB_ACTION_PATH/run.sh"
