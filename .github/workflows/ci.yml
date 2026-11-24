@@ -258,6 +258,13 @@ jobs:
       - name: go-ci local runner tests
         shell: bash
         run: bash go-ci/tests/local.sh
+      # skill-check runs inside go-ci's gate, so its tests ride in this
+      # required job. Node and npm come from the runner image, as for callers.
+      - name: skill-check tests
+        shell: bash
+        run: bash skill-check/tests/test.sh
+      # The action itself, from this checkout, on this repo (no SKILL.md: passes).
+      - uses: ./skill-check
 
   cfn-check:
     runs-on: ubuntu-26.04

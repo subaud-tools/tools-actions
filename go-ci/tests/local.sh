@@ -20,11 +20,15 @@ mkdir -p "$W/pub/v9.9.9/go-ci"
 cat > "$W/pub/v9.9.9/go-ci/ci.sh" <<'GATE'
 #!/usr/bin/env bash
 echo "gate v9.9.9 ran in $PWD with FAMILY_CONFIG=$FAMILY_CONFIG RACE=${RACE:-} TARGETS=${TARGETS:-}"
+echo "skill-check dir=${SKILL_CHECK_DIR:-unset} cache=${SKILL_CHECK_CACHE:-unset}"
 [ -f "$FAMILY_CONFIG" ] || { echo "no config"; exit 3; }
 exit "${GATE_EXIT:-0}"
 GATE
 printf 'version: "2"\n' > "$W/pub/v9.9.9/go-ci/golangci.yml"
 printf 'version 2.12.2\n' > "$W/pub/v9.9.9/go-ci/golangci-lint.lock"
+# ...and the skill-check go-ci's skills step runs, beside it.
+mkdir -p "$W/pub/v9.9.9/skill-check"
+for f in run.sh check.mjs package.json package-lock.json; do printf 'served %s\n' "$f" > "$W/pub/v9.9.9/skill-check/$f"; done
 
 repo="$W/repo"; mkdir -p "$repo/.github/workflows"
 printf 'module example.com/x\n\ngo 1.26.3\n' > "$repo/go.mod"
@@ -44,6 +48,8 @@ run; rc=$?
 check "runs the gate at the ci.yml pin" '[ $rc -eq 0 ] && grep -q "gate v9.9.9 ran in $repo" "$W/log"'
 check "passes the fetched family config" 'grep -q "FAMILY_CONFIG=$W/cache/tools-actions/v9.9.9/go-ci/golangci.yml" "$W/log"'
 check "caches the fetched files" '[ -f "$W/cache/tools-actions/v9.9.9/go-ci/ci.sh" ]'
+check "fetches that version's skill-check beside go-ci" '( for f in run.sh check.mjs package.json package-lock.json; do grep -qx "served $f" "$W/cache/tools-actions/v9.9.9/skill-check/$f" || exit 1; done ) && [ -f "$W/cache/tools-actions/v9.9.9/skill-check/.complete" ]'
+check "the gate runs that skill-check, its npm install cached under the version" 'grep -q "skill-check dir=$W/cache/tools-actions/v9.9.9/skill-check cache=$W/cache/tools-actions/v9.9.9/skill-check/npm" "$W/log"'
 
 echo "== uses the cache"
 rm -rf "$W/pub/v9.9.9"
@@ -67,6 +73,8 @@ echo "== golangci-lint: the pinned version, installed if needed"
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"; case "$(uname -m)" in arm64|aarch64) arch=arm64;; *) arch=amd64;; esac
 printf '      - uses: subaud-tools/tools-actions/go-ci@v9.9.9\n' > "$repo/.github/workflows/ci.yml"
 mkdir -p "$W/pub/v9.9.9/go-ci"
+mkdir -p "$W/pub/v9.9.9/skill-check"
+for f in run.sh check.mjs package.json package-lock.json; do printf 'served %s\n' "$f" > "$W/pub/v9.9.9/skill-check/$f"; done
 printf '#!/usr/bin/env bash\necho "gate ran with $(golangci-lint --version)"\n' > "$W/pub/v9.9.9/go-ci/ci.sh"
 printf 'version: "2"\n' > "$W/pub/v9.9.9/go-ci/golangci.yml"
 # A fake golangci-lint 2.12.2 release tarball and its checksum in the lock.

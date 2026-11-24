@@ -6,7 +6,9 @@
 # 1. Read the `subaud-tools/tools-actions/go-ci@vX.Y.Z` pin from
 #    .github/workflows/ci.yml (the one pin Dependabot bumps).
 # 2. Fetch that version's ci.sh, family golangci.yml and golangci-lint.lock
-#    into ~/.cache/tools-actions/vX.Y.Z/ (kept; later runs work offline).
+#    into ~/.cache/tools-actions/vX.Y.Z/go-ci/, and the skill-check its skills
+#    step runs into ~/.cache/tools-actions/vX.Y.Z/skill-check/ (with its npm
+#    install under skill-check/npm/) (kept; later runs work offline).
 # 3. Use golangci-lint from PATH if it is the locked version, else install the
 #    locked version into the cache (checksum-verified) and use that.
 # 4. Run Go at the version CI's actions/setup-go installs from go.mod (see
@@ -17,6 +19,7 @@
 #      GOLANGCI_DL_BASE (default https://github.com/golangci/golangci-lint/releases/download),
 #      GO_DL_JSON (default https://go.dev/dl/?mode=json&include=all), GOTOOLCHAIN (kept if set),
 #      XDG_CACHE_HOME, and ci.sh's own RACE / TARGETS / PACKAGES / SKIP_LINT.
+#      SKILL_CHECK_DIR and SKILL_CHECK_CACHE are set to the fetched skill-check.
 set -euo pipefail
 die() { echo "go-ci local: $*" >&2; exit 2; }
 
@@ -27,14 +30,20 @@ ver="$(grep -oE 'subaud-tools/tools-actions/go-ci@v[0-9]+\.[0-9]+\.[0-9]+' "$ci"
 
 base="${TOOLS_ACTIONS_BASE:-https://raw.githubusercontent.com/subaud-tools/tools-actions}"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/tools-actions"
-dir="$cache/$ver/go-ci"
-if [ ! -f "$dir/.complete" ]; then
-  tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-  for f in ci.sh golangci.yml golangci-lint.lock; do
-    curl -fsSL "$base/$ver/go-ci/$f" -o "$tmp/$f" || die "could not fetch tools-actions $ver go-ci/$f from $base"
+# fetch <action> <file>...: that version's files into $cache/$ver/<action>/,
+# all or nothing, marked .complete.
+fetch() {
+  local a="$1" d="$cache/$ver/$1" t f; shift
+  [ -f "$d/.complete" ] && return 0
+  t="$(mktemp -d)"
+  for f in "$@"; do
+    curl -fsSL "$base/$ver/$a/$f" -o "$t/$f" || { rm -rf "$t"; die "could not fetch tools-actions $ver $a/$f from $base"; }
   done
-  mkdir -p "$dir" && cp "$tmp"/* "$dir/" && touch "$dir/.complete"
-fi
+  mkdir -p "$d" && cp "$t"/* "$d/" && touch "$d/.complete"; rm -rf "$t"
+}
+dir="$cache/$ver/go-ci"
+fetch go-ci ci.sh golangci.yml golangci-lint.lock
+fetch skill-check run.sh check.mjs package.json package-lock.json
 
 want="$(awk '$1=="version"{print $2}' "$dir/golangci-lint.lock")"
 have=""; command -v golangci-lint >/dev/null 2>&1 && have="$(golangci-lint --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
@@ -93,4 +102,5 @@ if [ -z "${GOTOOLCHAIN:-}" ]; then
 fi
 
 echo "go-ci local: tools-actions $ver, golangci-lint ${want:-as installed}, $GOTOOLCHAIN"
-FAMILY_CONFIG="$dir/golangci.yml" exec bash "$dir/ci.sh"
+FAMILY_CONFIG="$dir/golangci.yml" SKILL_CHECK_DIR="$cache/$ver/skill-check" \
+  SKILL_CHECK_CACHE="$cache/$ver/skill-check/npm" exec bash "$dir/ci.sh"

@@ -1,6 +1,7 @@
 name: Go CI
 description: >-
-  The .tools family Go gate: gofmt, go vet, golangci-lint (pinned,
+  The .tools family Go gate: skills (every tracked SKILL.md loads in pi, via
+  skill-check), gofmt, go vet, golangci-lint (pinned,
   checksum-verified; config verified before use), go test -race, and a
   CGO_ENABLED=0 build for each release target. Uses the repo's own
   .golangci.yml when it has one, else the family default shipped with this
@@ -68,4 +69,7 @@ runs:
         TARGETS: ${{ inputs.targets }}
         SKIP_LINT: ${{ inputs.lint != 'true' }}
         FAMILY_CONFIG: ${{ github.action_path }}/golangci.yml
+        # The skills step runs the skill-check from this same release, beside go-ci.
+        SKILL_CHECK_DIR: ${{ github.action_path }}/../skill-check
+        SKILL_CHECK_CACHE: ${{ runner.temp }}/skill-check
       run: bash "$GITHUB_ACTION_PATH/ci.sh"
